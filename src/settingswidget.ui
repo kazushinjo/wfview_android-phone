@@ -139,42 +139,25 @@
                 </property>
                </widget>
               </item>
-              <item row="0" column="1">
-               <widget class="AndroidLineEdit" name="rigCIVaddrHexLine">
+              <item row="1" column="0">
+               <widget class="QComboBox" name="rigCIVaddrCombo">
                 <property name="enabled">
                  <bool>false</bool>
                 </property>
                 <property name="minimumSize">
                  <size>
-                  <width>50</width>
+                  <width>170</width>
                   <height>0</height>
                  </size>
                 </property>
-                <property name="maximumSize">
-                 <size>
-                  <width>50</width>
-                  <height>16777215</height>
-                 </size>
+                <property name="editable">
+                 <bool>true</bool>
                 </property>
                 <property name="toolTip">
-                 <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enter the address in as hexadecimal, without any prefix, just as the radio presents the address in the menu. &lt;/p&gt;&lt;p&gt;Here are some common examples:&lt;/p&gt;
-&lt;p&gt;IC-706: 58 
-&lt;br/&gt;IC-756: 50
-&lt;br/&gt;IC-756 Pro: 5C
-&lt;br/&gt;IC-756 Pro II: 64
-&lt;br/&gt;IC-756 Pro III: 6E
-&lt;br/&gt;IC-7000: 70
-&lt;br/&gt;IC-7100: 88
-&lt;br/&gt;IC-7200: 76 
-&lt;br/&gt;IC-7300: 94
-&lt;/p&gt;&lt;p&gt;This setting is typically needed for older radios and for radios that do not have CI-V Transceive enabled. &lt;/p&gt;
-&lt;p&gt;After changing, press Save Settings and re-launch wfview.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Select your radio model, or type the CI-V address in hexadecimal (no prefix), just as the radio presents the address in the menu.&lt;/p&gt;&lt;p&gt;This setting is typically needed for older radios and for radios that do not have CI-V Transceive enabled.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
                 </property>
                 <property name="accessibleName">
-                 <string>Manual CI-V Textbox</string>
-                </property>
-                <property name="text">
-                 <string>auto</string>
+                 <string>Manual CI-V Selector</string>
                 </property>
                </widget>
               </item>

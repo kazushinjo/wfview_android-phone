@@ -13,6 +13,8 @@
 #include <QLineEdit>
 #include <QStringList>
 #include <QShortcut>
+#include <QComboBox>
+#include <QPushButton>
 
 #include "logcategories.h"
 #include "prefs.h"
@@ -37,8 +39,12 @@ public:
 
     ~settingswidget();
 
+    QString currentConnectionProfileName() const;
+
 public slots:
     void acceptPreferencesPtr(preferences *pptr);
+    void acceptRigListPtr(QHash<quint16,rigInfo> *rptr);
+    void refreshCivAddrList();
     void acceptUdpPreferencesPtr(udpPreferences *upptr);
     void acceptServerConfig(SERVERCONFIG *serverConfig);
     void acceptColorPresetPtr(colorPrefsType *cp);
@@ -74,6 +80,8 @@ public slots:
 
     void connectionStatus(bool conn);
 
+    void setConnectionProfiles(const QStringList& profileNames, const QString& currentProfile);
+
 signals:
     void changedIfPrefs(quint64 items);
     void changedColPrefs(quint64 items);
@@ -103,6 +111,9 @@ signals:
     void saveSettingsButtonPressed();
     void revertSettingsButtonPressed();
     void havePortError(errorType err);
+    void connectionProfileSelected(QString name);
+    void connectionProfileSaveRequested(QString name);
+    void connectionProfileDeleteRequested(QString name);
 
 private slots:
     void runShortcut(const QKeySequence k);
@@ -143,7 +154,10 @@ private slots:
 
     void on_manufacturerCombo_currentIndexChanged(int value);
     void on_rigCIVManualAddrChk_clicked(bool checked);
-    void on_rigCIVaddrHexLine_editingFinished();
+    void on_rigCIVaddrCombo_activated(int index);
+    void civAddrEditFinished();
+    void populateCivAddrCombo();
+    void setCivComboToAddress(quint16 addr);
     void on_useCIVasRigIDChk_clicked(bool checked);
     void on_enableRigctldChk_clicked(bool checked);
     void on_rigctldPortTxt_editingFinished();
@@ -309,6 +323,8 @@ private slots:
 private:
     Ui::settingswidget *ui;
     void createSettingsListItems();
+    void createConnectionProfileControls();
+    void commitPendingEdits();
     void populateComboBoxes();
     void updateAllPrefs();
     void updateUnderlayMode();
@@ -349,6 +365,7 @@ private:
     void populateServerUsers();
 
     preferences *prefs = NULL;
+    QHash<quint16,rigInfo> *rigList = Q_NULLPTR;
     colorPrefsType *colorPreset;
     udpPreferences *udpPrefs = NULL;
     SERVERCONFIG *serverConfig = NULL;
@@ -365,6 +382,9 @@ private:
     bool updatingUIFromPrefs = false;
     bool connectedStatus = false;
     audioDevices* audioDev = Q_NULLPTR;
+    QComboBox *connectionProfileCombo = Q_NULLPTR;
+    QPushButton *connectionProfileSaveBtn = Q_NULLPTR;
+    QPushButton *connectionProfileDeleteBtn = Q_NULLPTR;
 
 };
 

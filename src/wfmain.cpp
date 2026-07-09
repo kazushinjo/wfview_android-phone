@@ -1,5 +1,17 @@
 #include "wfmain.h"
 #include "androidcompat.h"
+#ifdef Q_OS_ANDROID
+#include <QTextBrowser>
+#include <QTextBlock>
+#include <QAbstractTextDocumentLayout>
+#include <QScrollBar>
+#include <QScroller>
+#include <QDesktopServices>
+#include <QGuiApplication>
+#include <QScreen>
+#include <QApplication>
+#include <QGraphicsView>
+#endif
 #include "icomserver.h"
 #include "ui_wfmain.h"
 
@@ -41,6 +53,23 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     setWindowTitle(QString("wfview"));
 
     ui->monitorLabel->setText("Mon");
+
+#ifdef Q_OS_ANDROID
+    // The modulation-level slider keeps a fixed label; the slider adjusts
+    // whichever input (USB/LAN/Mic...) is currently active.
+    ui->modSliderLbl->setText(QStringLiteral("MOD"));
+
+    // "ヘルプ" opens the bundled operation manual; insert it in the bottom
+    // function-button row before the Connect button.
+    QPushButton *helpButton = new QPushButton(tr("ヘルプ"), this);
+    helpButton->setObjectName(QStringLiteral("androidHelpBtn"));
+    helpButton->setToolTip(QStringLiteral("操作説明書を表示します"));
+    {
+        const int connectIndex = ui->horizontalLayout_16->indexOf(ui->connectBtn);
+        ui->horizontalLayout_16->insertWidget(connectIndex >= 0 ? connectIndex : -1, helpButton);
+    }
+    connect(helpButton, &QPushButton::clicked, this, &wfmain::showAndroidHelp);
+#endif
 
     // Accessibility: the operating buttons are NoFocus in the .ui so the tuning
     // controls keep keyboard focus. That leaves keyboard-only and VoiceOver
@@ -119,6 +148,7 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
 
     finputbtns = new frequencyinputwidget();
     setupui = new settingswidget();
+    setupui->acceptRigListPtr(&rigList);
 
     connect(setupui, SIGNAL(havePortError(errorType)), this, SLOT(receivePortError(errorType)));
 
@@ -255,6 +285,7 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     setupui->updateLanPrefs((int)l_all);
     setupui->updateUdpPrefs((int)u_all);
     setupui->updateServerConfigs((int)s_all);
+    refreshConnectionProfileUi();
 
     finputbtns->setAutomaticSidebandSwitching(prefs.automaticSidebandSwitching);
 
@@ -495,6 +526,16 @@ void wfmain::openRig()
     // if (prefs.fileWasNotFound) {
     //     showRigSettings(); // rig setting dialog box for network/serial, CIV, hostname, port, baud rate, serial device, etc
     // TODO: How do we know if the setting was loaded?
+
+    if (prefs.enableLAN && udpPrefs.ipAddress.trimmed().isEmpty())
+    {
+        // Nothing to connect to yet (e.g. right after a fresh install).
+        // Connecting anyway would flip the whole settings UI into its
+        // disabled "connected" state with no radio on the other end.
+        qInfo(logSystem()) << "No host configured; skipping automatic rig connection.";
+        showStatusBarText(tr("接続先が未設定です。設定画面でホスト名を入力してください。"));
+        return;
+    }
 
     emit connectionStatus(true); // Signal any other parts that need to know if we are connecting/connected.
     ui->connectBtn->setText("Cancel connection"); // We are attempting to connect
@@ -1040,6 +1081,9 @@ void wfmain::connectSettingsWidget()
 
     connect(this, SIGNAL(connectionStatus(bool)), setupui, SLOT(connectionStatus(bool)));
     connect(setupui, SIGNAL(connectButtonPressed()), this, SLOT(handleExtConnectBtn()));
+    connect(setupui, SIGNAL(connectionProfileSelected(QString)), this, SLOT(handleConnectionProfileSelected(QString)));
+    connect(setupui, SIGNAL(connectionProfileSaveRequested(QString)), this, SLOT(handleConnectionProfileSaveRequested(QString)));
+    connect(setupui, SIGNAL(connectionProfileDeleteRequested(QString)), this, SLOT(handleConnectionProfileDeleteRequested(QString)));
     connect(setupui, SIGNAL(saveSettingsButtonPressed()), this, SLOT(on_saveSettingsBtn_clicked()));
     connect(setupui, SIGNAL(revertSettingsButtonPressed()), this, SLOT(handleRevertSettingsBtn()));
 }
@@ -2261,6 +2305,10 @@ void wfmain::loadSettings()
 
     settings->endGroup();
 
+    settings->beginGroup("ConnectionProfiles");
+    currentConnectionProfile = settings->value("Current", QString()).toString();
+    settings->endGroup();
+
     settings->beginGroup("Server");
     setupui->acceptServerConfig(&serverConfig);
 
@@ -3083,6 +3131,8 @@ void wfmain::setManufacturer(manufacturersType_t man)
         }
     }
 
+    if (setupui != Q_NULLPTR)
+        setupui->refreshCivAddrList();
 }
 
 void wfmain::extChangedRsPref(prefRsItem i)
@@ -4086,7 +4136,15 @@ void wfmain::setAppTheme(bool isCustom)
         {
             if (f.open(QFile::ReadOnly | QFile::Text)) {
                 QTextStream ts(&f);
-                qApp->setStyleSheet(ts.readAll());
+                QString sheet = ts.readAll();
+#ifdef Q_OS_ANDROID
+                // Transmit button: pale-green background at all times (crimson
+                // text is applied dynamically while transmitting).
+                sheet += QStringLiteral(
+                    "QPushButton#transmitBtn { background-color: #81c784; color: white;"
+                    " font-weight: bold; border-radius: 10px; padding: 4px 10px; }");
+#endif
+                qApp->setStyleSheet(sheet);
             }
         }
     } else {
@@ -4311,10 +4369,17 @@ void wfmain::changeTxBtn()
 {
     if(amTransmitting)
     {
-        ui->transmitBtn->setText("Receive");
-
+        ui->transmitBtn->setText("送信中");
+#ifdef Q_OS_ANDROID
+        // While transmitting: crimson bold text on the green button.
+        ui->transmitBtn->setStyleSheet("color: crimson; font-weight: bold;");
+#endif
     } else {
-        ui->transmitBtn->setText("Transmit");
+        ui->transmitBtn->setText("送信");
+#ifdef Q_OS_ANDROID
+        // Receiving: revert to the pale-green background style (set globally).
+        ui->transmitBtn->setStyleSheet("");
+#endif
     }
 }
 
@@ -4710,6 +4775,245 @@ void wfmain::receiveATUStatus(quint8 atustatus)
     }
 }
 
+QStringList wfmain::connectionProfileNames() const
+{
+    QStringList names;
+
+    settings->beginGroup("ConnectionProfiles");
+    names = settings->value("Names").toStringList();
+
+    const int count = settings->beginReadArray("Profile");
+    for (int i = 0; i < count; ++i)
+    {
+        settings->setArrayIndex(i);
+        const QString name = settings->value("Name").toString();
+        if (!name.isEmpty() && !names.contains(name))
+            names.append(name);
+    }
+    settings->endArray();
+    settings->endGroup();
+
+    return names;
+}
+
+QString wfmain::connectionProfileStorageKey(const QString& name) const
+{
+    return QString::fromLatin1(name.trimmed().toUtf8().toPercentEncoding());
+}
+
+void wfmain::refreshConnectionProfileUi()
+{
+    setupui->setConnectionProfiles(connectionProfileNames(), currentConnectionProfile);
+}
+
+void wfmain::saveConnectionProfile(const QString& name)
+{
+    const QString profileName = name.trimmed();
+    if (profileName.isEmpty())
+        return;
+
+    QStringList names = connectionProfileNames();
+    if (!names.contains(profileName))
+        names.append(profileName);
+
+    settings->beginGroup("ConnectionProfiles");
+    settings->setValue("Names", names);
+    settings->remove("Profile");
+    settings->beginGroup("Profiles");
+    settings->beginGroup(connectionProfileStorageKey(profileName));
+    settings->setValue("Name", profileName);
+    settings->setValue("Manufacturer", static_cast<int>(prefs.manufacturer));
+    settings->setValue("RigCIVuInt", prefs.radioCIVAddr);
+    settings->setValue("CIVisRadioModel", prefs.CIVisRadioModel);
+    settings->setValue("PTTType", static_cast<int>(prefs.pttType));
+    settings->setValue("polling_ms", prefs.polling_ms);
+    settings->setValue("SerialPortRadio", prefs.serialPortRadio);
+    settings->setValue("SerialPortBaud", prefs.serialPortBaud);
+    settings->setValue("VirtualSerialPort", prefs.virtualSerialPort);
+    settings->setValue("AudioSystem", static_cast<int>(prefs.audioSystem));
+    settings->setValue("EnableLAN", prefs.enableLAN);
+    settings->setValue("IPAddress", udpPrefs.ipAddress);
+    settings->setValue("ControlLANPort", udpPrefs.controlLANPort);
+    settings->setValue("SerialLANPort", udpPrefs.serialLANPort);
+    settings->setValue("AudioLANPort", udpPrefs.audioLANPort);
+    settings->setValue("ScopeLANPort", udpPrefs.scopeLANPort);
+    settings->setValue("AdminLogin", udpPrefs.adminLogin);
+    settings->setValue("Username", udpPrefs.username);
+    settings->setValue("Password", udpPrefs.password);
+    settings->setValue("ConnectionType", static_cast<int>(udpPrefs.connectionType));
+    settings->setValue("HalfDuplex", udpPrefs.halfDuplex);
+    settings->setValue("WaterfallFormat", prefs.waterfallFormat);
+    settings->setValue("AudioRXLatency", prefs.rxSetup.latency);
+    settings->setValue("AudioTXLatency", prefs.txSetup.latency);
+    settings->setValue("AudioRXSampleRate", prefs.rxSetup.sampleRate);
+    settings->setValue("AudioRXCodec", prefs.rxSetup.codec);
+    settings->setValue("AudioTXCodec", prefs.txSetup.codec);
+    settings->setValue("AudioOutput", prefs.rxSetup.name);
+    settings->setValue("AudioInput", prefs.txSetup.name);
+    settings->endGroup();
+    settings->endGroup();
+    settings->setValue("Current", profileName);
+    settings->endGroup();
+    settings->sync();
+
+    currentConnectionProfile = profileName;
+    refreshConnectionProfileUi();
+    showStatusBarText(QString("Saved connection profile: %1").arg(profileName));
+}
+
+bool wfmain::loadConnectionProfile(const QString& name)
+{
+    const QString profileName = name.trimmed();
+    if (profileName.isEmpty())
+        return false;
+
+    bool found = false;
+    settings->beginGroup("ConnectionProfiles");
+    settings->beginGroup("Profiles");
+    settings->beginGroup(connectionProfileStorageKey(profileName));
+    found = settings->value("Name").toString() == profileName;
+    if (found)
+    {
+        prefs.manufacturer = static_cast<manufacturersType_t>(settings->value("Manufacturer", prefs.manufacturer).toInt());
+        prefs.radioCIVAddr = static_cast<quint16>(settings->value("RigCIVuInt", prefs.radioCIVAddr).toInt());
+        prefs.CIVisRadioModel = settings->value("CIVisRadioModel", prefs.CIVisRadioModel).toBool();
+        prefs.pttType = static_cast<pttType_t>(settings->value("PTTType", prefs.pttType).toInt());
+        prefs.polling_ms = settings->value("polling_ms", prefs.polling_ms).toInt();
+        prefs.serialPortRadio = settings->value("SerialPortRadio", prefs.serialPortRadio).toString();
+        prefs.serialPortBaud = static_cast<quint32>(settings->value("SerialPortBaud", prefs.serialPortBaud).toInt());
+        prefs.virtualSerialPort = settings->value("VirtualSerialPort", prefs.virtualSerialPort).toString();
+        prefs.audioSystem = static_cast<audioType>(settings->value("AudioSystem", prefs.audioSystem).toInt());
+        prefs.enableLAN = settings->value("EnableLAN", prefs.enableLAN).toBool();
+        udpPrefs.ipAddress = settings->value("IPAddress", udpPrefs.ipAddress).toString();
+        udpPrefs.controlLANPort = static_cast<quint16>(settings->value("ControlLANPort", udpPrefs.controlLANPort).toInt());
+        udpPrefs.serialLANPort = static_cast<quint16>(settings->value("SerialLANPort", udpPrefs.serialLANPort).toInt());
+        udpPrefs.audioLANPort = static_cast<quint16>(settings->value("AudioLANPort", udpPrefs.audioLANPort).toInt());
+        udpPrefs.scopeLANPort = static_cast<quint16>(settings->value("ScopeLANPort", udpPrefs.scopeLANPort).toInt());
+        udpPrefs.adminLogin = settings->value("AdminLogin", udpPrefs.adminLogin).toBool();
+        udpPrefs.username = settings->value("Username", udpPrefs.username).toString();
+        udpPrefs.password = settings->value("Password", udpPrefs.password).toString();
+        udpPrefs.connectionType = static_cast<connectionType_t>(settings->value("ConnectionType", udpPrefs.connectionType).toInt());
+        udpPrefs.halfDuplex = settings->value("HalfDuplex", udpPrefs.halfDuplex).toBool();
+        prefs.waterfallFormat = settings->value("WaterfallFormat", prefs.waterfallFormat).toInt();
+        prefs.rxSetup.latency = settings->value("AudioRXLatency", prefs.rxSetup.latency).toInt();
+        prefs.txSetup.latency = settings->value("AudioTXLatency", prefs.txSetup.latency).toInt();
+        prefs.rxSetup.sampleRate = settings->value("AudioRXSampleRate", prefs.rxSetup.sampleRate).toInt();
+        prefs.txSetup.sampleRate = prefs.rxSetup.sampleRate;
+        prefs.rxSetup.codec = settings->value("AudioRXCodec", prefs.rxSetup.codec).toInt();
+        prefs.txSetup.codec = settings->value("AudioTXCodec", prefs.txSetup.codec).toInt();
+        prefs.rxSetup.name = settings->value("AudioOutput", prefs.rxSetup.name).toString();
+        prefs.txSetup.name = settings->value("AudioInput", prefs.txSetup.name).toString();
+    }
+    settings->endGroup();
+    settings->endGroup();
+
+    if (!found)
+    {
+        const int count = settings->beginReadArray("Profile");
+        for (int i = 0; i < count; ++i)
+        {
+            settings->setArrayIndex(i);
+            if (settings->value("Name").toString() != profileName)
+                continue;
+
+            prefs.manufacturer = static_cast<manufacturersType_t>(settings->value("Manufacturer", prefs.manufacturer).toInt());
+            prefs.radioCIVAddr = static_cast<quint16>(settings->value("RigCIVuInt", prefs.radioCIVAddr).toInt());
+            prefs.CIVisRadioModel = settings->value("CIVisRadioModel", prefs.CIVisRadioModel).toBool();
+            prefs.pttType = static_cast<pttType_t>(settings->value("PTTType", prefs.pttType).toInt());
+            prefs.polling_ms = settings->value("polling_ms", prefs.polling_ms).toInt();
+            prefs.serialPortRadio = settings->value("SerialPortRadio", prefs.serialPortRadio).toString();
+            prefs.serialPortBaud = static_cast<quint32>(settings->value("SerialPortBaud", prefs.serialPortBaud).toInt());
+            prefs.virtualSerialPort = settings->value("VirtualSerialPort", prefs.virtualSerialPort).toString();
+            prefs.audioSystem = static_cast<audioType>(settings->value("AudioSystem", prefs.audioSystem).toInt());
+            prefs.enableLAN = settings->value("EnableLAN", prefs.enableLAN).toBool();
+            udpPrefs.ipAddress = settings->value("IPAddress", udpPrefs.ipAddress).toString();
+            udpPrefs.controlLANPort = static_cast<quint16>(settings->value("ControlLANPort", udpPrefs.controlLANPort).toInt());
+            udpPrefs.serialLANPort = static_cast<quint16>(settings->value("SerialLANPort", udpPrefs.serialLANPort).toInt());
+            udpPrefs.audioLANPort = static_cast<quint16>(settings->value("AudioLANPort", udpPrefs.audioLANPort).toInt());
+            udpPrefs.scopeLANPort = static_cast<quint16>(settings->value("ScopeLANPort", udpPrefs.scopeLANPort).toInt());
+            udpPrefs.adminLogin = settings->value("AdminLogin", udpPrefs.adminLogin).toBool();
+            udpPrefs.username = settings->value("Username", udpPrefs.username).toString();
+            udpPrefs.password = settings->value("Password", udpPrefs.password).toString();
+            udpPrefs.connectionType = static_cast<connectionType_t>(settings->value("ConnectionType", udpPrefs.connectionType).toInt());
+            udpPrefs.halfDuplex = settings->value("HalfDuplex", udpPrefs.halfDuplex).toBool();
+            prefs.waterfallFormat = settings->value("WaterfallFormat", prefs.waterfallFormat).toInt();
+            prefs.rxSetup.latency = settings->value("AudioRXLatency", prefs.rxSetup.latency).toInt();
+            prefs.txSetup.latency = settings->value("AudioTXLatency", prefs.txSetup.latency).toInt();
+            prefs.rxSetup.sampleRate = settings->value("AudioRXSampleRate", prefs.rxSetup.sampleRate).toInt();
+            prefs.txSetup.sampleRate = prefs.rxSetup.sampleRate;
+            prefs.rxSetup.codec = settings->value("AudioRXCodec", prefs.rxSetup.codec).toInt();
+            prefs.txSetup.codec = settings->value("AudioTXCodec", prefs.txSetup.codec).toInt();
+            prefs.rxSetup.name = settings->value("AudioOutput", prefs.rxSetup.name).toString();
+            prefs.txSetup.name = settings->value("AudioInput", prefs.txSetup.name).toString();
+            found = true;
+            break;
+        }
+        settings->endArray();
+    }
+
+    if (found)
+        settings->setValue("Current", profileName);
+    settings->endGroup();
+
+    if (!found)
+        return false;
+
+    currentConnectionProfile = profileName;
+    settings->sync();
+    prefs.settingsChanged = true;
+    serverConfig.baudRate = prefs.serialPortBaud;
+    setManufacturer(prefs.manufacturer);
+    setupui->updateRaPrefs((int)ra_all);
+    setupui->updateLanPrefs((int)l_all);
+    setupui->updateUdpPrefs((int)u_all);
+    refreshConnectionProfileUi();
+    showStatusBarText(QString("Selected connection profile: %1").arg(profileName));
+    return true;
+}
+
+void wfmain::deleteConnectionProfile(const QString& name)
+{
+    const QString profileName = name.trimmed();
+    if (profileName.isEmpty())
+        return;
+
+    QStringList names = connectionProfileNames();
+    names.removeAll(profileName);
+
+    settings->beginGroup("ConnectionProfiles");
+    settings->setValue("Names", names);
+    settings->remove("Profile");
+    settings->beginGroup("Profiles");
+    settings->remove(connectionProfileStorageKey(profileName));
+    settings->endGroup();
+
+    if (currentConnectionProfile == profileName)
+    {
+        currentConnectionProfile.clear();
+        settings->remove("Current");
+    }
+    settings->endGroup();
+    settings->sync();
+
+    refreshConnectionProfileUi();
+    showStatusBarText(QString("Deleted connection profile: %1").arg(profileName));
+}
+
+void wfmain::handleConnectionProfileSelected(QString name)
+{
+    loadConnectionProfile(name);
+}
+
+void wfmain::handleConnectionProfileSaveRequested(QString name)
+{
+    saveConnectionProfile(name);
+}
+
+void wfmain::handleConnectionProfileDeleteRequested(QString name)
+{
+    deleteConnectionProfile(name);
+}
+
 void wfmain::handleExtConnectBtn() {
     // from settings widget
     on_connectBtn_clicked();
@@ -4865,6 +5169,145 @@ void wfmain::showAndRaiseWidget(QWidget *w)
     w->raise();
     w->activateWindow();
 }
+
+#ifdef Q_OS_ANDROID
+void wfmain::showAndroidHelp()
+{
+    if (androidHelpWindow == nullptr)
+    {
+        // Top-level (no parent): showAndRaiseWidget embeds it into a
+        // QGraphicsScene proxy, which requires an unparented widget.
+        androidHelpWindow = new QWidget();
+        androidHelpWindow->setWindowTitle(QStringLiteral("操作説明書"));
+        // A bare QTextBrowser's sizeHint is tiny; the fit-to-screen wrapper
+        // would blow it up to a handful of huge lines. Pin the natural size
+        // to the screen's logical size so the wrapper's scale stays ~1.
+        if (QScreen *scr = QGuiApplication::primaryScreen())
+            androidHelpWindow->setMinimumSize(scr->availableSize());
+        QVBoxLayout *layout = new QVBoxLayout(androidHelpWindow);
+
+        QPushButton *backBtn = new QPushButton(tr("← 戻る"), androidHelpWindow);
+        backBtn->setObjectName(QStringLiteral("androidHelpBackBtn"));
+        QHBoxLayout *topRow = new QHBoxLayout();
+        topRow->addWidget(backBtn);
+        topRow->addStretch(1);
+        layout->addLayout(topRow);
+
+        QTextBrowser *browser = new QTextBrowser(androidHelpWindow);
+        QFile manual(QStringLiteral(":/resources/help_ja.md"));
+        if (manual.open(QFile::ReadOnly | QFile::Text))
+            browser->setMarkdown(QString::fromUtf8(manual.readAll()));
+        else
+            browser->setPlainText(QStringLiteral("操作説明書リソースが見つかりません。"));
+        browser->zoomIn(1);
+        // Finger flick scrolling. Text selection would fight the pan gesture,
+        // so leave only link taps enabled; Android delivers touches as
+        // synthesized mouse events, which LeftMouseButtonGesture picks up.
+        browser->setTextInteractionFlags(Qt::LinksAccessibleByMouse);
+        QScroller::grabGesture(browser->viewport(), QScroller::LeftMouseButtonGesture);
+        // Qt's markdown importer does not create anchors for headings, so the
+        // table-of-contents links (#sec-N) are resolved by hand: jump to the
+        // heading block whose text starts with "N. ".
+        browser->setOpenLinks(false);
+        connect(browser, &QTextBrowser::anchorClicked, browser,
+                [browser](const QUrl &url) {
+            const QString target = url.fragment();
+            if (target.startsWith(QLatin1String("sec-")))
+            {
+                const QString prefix = target.mid(4) + QLatin1String(". ");
+                for (QTextBlock block = browser->document()->begin();
+                     block.isValid(); block = block.next())
+                {
+                    if (block.blockFormat().headingLevel() > 0 &&
+                        block.text().startsWith(prefix))
+                    {
+                        // Remember where the jump started (the table of
+                        // contents) so the back button can return there first.
+                        browser->setProperty("helpTocPos",
+                                             browser->verticalScrollBar()->value());
+                        if (QPushButton *bb = browser->parentWidget()
+                                ->findChild<QPushButton*>("androidHelpBackBtn"))
+                            bb->setText(QStringLiteral("← 目次に戻る"));
+                        const qreal top = browser->document()->documentLayout()
+                                              ->blockBoundingRect(block).top();
+                        browser->verticalScrollBar()->setValue(qRound(top));
+                        return;
+                    }
+                }
+            }
+            else if (url.scheme().startsWith(QLatin1String("http")))
+            {
+                QDesktopServices::openUrl(url);
+            }
+        });
+        layout->addWidget(browser);
+
+        // Two-stage back button: after a table-of-contents jump the first tap
+        // returns to the table of contents; from there (or without a jump) it
+        // closes the help and returns to the main screen.
+        connect(backBtn, &QPushButton::clicked, androidHelpWindow,
+                [this, backBtn, browser]() {
+            const QVariant tocPos = browser->property("helpTocPos");
+            if (tocPos.isValid())
+            {
+                browser->verticalScrollBar()->setValue(tocPos.toInt());
+                browser->setProperty("helpTocPos", QVariant());
+                backBtn->setText(tr("← 戻る"));
+            }
+            else
+            {
+                // The widget is shown wrapped in the fit-to-screen view;
+                // hide that wrapper, not the inner widget.
+                QWidget *helpWrapper = androidHelpWindow->window();
+                if (helpWrapper != Q_NULLPTR)
+                    helpWrapper->hide();
+                // Android sometimes leaves the main fullscreen view's
+                // surface stale (uniform grey) after another top-level
+                // window is dismissed; re-present it explicitly.
+                const auto topLevels = QApplication::topLevelWidgets();
+                for (QWidget *tlw : topLevels)
+                {
+                    if (tlw != helpWrapper && tlw->isVisible()
+                        && qobject_cast<QGraphicsView*>(tlw) != Q_NULLPTR)
+                    {
+                        tlw->showFullScreen();
+                        tlw->raise();
+                        tlw->activateWindow();
+                        tlw->update();
+                    }
+                }
+            }
+        });
+    }
+
+    showAndRaiseWidget(androidHelpWindow);
+
+    // Every press of the help button starts at the table of contents,
+    // regardless of where the user left off last time.
+    if (QTextBrowser *browser = androidHelpWindow->findChild<QTextBrowser*>())
+    {
+        browser->setProperty("helpTocPos", QVariant());
+        if (QPushButton *backBtn = androidHelpWindow->findChild<QPushButton*>("androidHelpBackBtn"))
+            backBtn->setText(tr("← 戻る"));
+        // Scroll after the pending layout pass so the position is accurate.
+        QTimer::singleShot(0, browser, [browser]() {
+            for (QTextBlock block = browser->document()->begin();
+                 block.isValid(); block = block.next())
+            {
+                if (block.blockFormat().headingLevel() > 0 &&
+                    block.text() == QStringLiteral("目次"))
+                {
+                    const qreal top = browser->document()->documentLayout()
+                                          ->blockBoundingRect(block).top();
+                    browser->verticalScrollBar()->setValue(qRound(top));
+                    return;
+                }
+            }
+            browser->verticalScrollBar()->setValue(0);
+        });
+    }
+}
+#endif
 
 void wfmain::changeSliderQuietly(QSlider *slider, int value)
 {
@@ -5025,7 +5468,13 @@ void wfmain::changeModLabel(rigInput input, bool updateLevel)
 
     ui->micGainSlider->setRange(f.minVal,f.maxVal);
 
+#ifdef Q_OS_ANDROID
+    // Keep the fixed "MOD" label; the active input name (USB, LAN, ...) is
+    // still available as the tooltip.
+    ui->modSliderLbl->setToolTip(input.name);
+#else
     ui->modSliderLbl->setText(input.name);
+#endif
 
     if(updateLevel)
     {

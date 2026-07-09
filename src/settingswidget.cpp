@@ -2,6 +2,11 @@
 #include "qserialportinfo.h"
 #include "ui_settingswidget.h"
 #include "androidcompat.h"
+#include <QAbstractItemView>
+#include <QApplication>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <algorithm>
 
 #define setchk(a,b) quietlyUpdateCheckbox(a,b)
 
@@ -20,6 +25,13 @@ settingswidget::settingswidget(QWidget *parent) :
     connect(ui->serverUsersDeleteBtn, &QPushButton::clicked, ui->serverUsersTable, &tableWidget::deleteItem);
     createSettingsListItems();
     populateComboBoxes();
+    createConnectionProfileControls();
+    populateCivAddrCombo();
+    if (ui->rigCIVaddrCombo->lineEdit() != Q_NULLPTR)
+    {
+        connect(ui->rigCIVaddrCombo->lineEdit(), &QLineEdit::editingFinished,
+                this, &settingswidget::civAddrEditFinished);
+    }
 
 #ifdef Q_OS_ANDROID
     // Direct USB serial CAT control is not supported on Android; force network mode.
@@ -57,6 +69,110 @@ settingswidget::settingswidget(QWidget *parent) :
     ui->adjRefBtn->setVisible(false);
 #endif
     setupKeyShortcuts();
+}
+
+void settingswidget::createConnectionProfileControls()
+{
+    QLabel *profileLabel = new QLabel(tr("Connection Profile"), ui->groupConnection);
+    connectionProfileCombo = new QComboBox(ui->groupConnection);
+    connectionProfileCombo->setObjectName(QStringLiteral("connectionProfileCombo"));
+    connectionProfileCombo->setEditable(true);
+    connectionProfileCombo->setInsertPolicy(QComboBox::NoInsert);
+    connectionProfileCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    connectionProfileCombo->setMinimumContentsLength(12);
+    if (connectionProfileCombo->lineEdit() != Q_NULLPTR)
+        connectionProfileCombo->lineEdit()->setPlaceholderText(tr("Enter profile name"));
+
+    connectionProfileSaveBtn = new QPushButton(tr("Save"), ui->groupConnection);
+    connectionProfileSaveBtn->setObjectName(QStringLiteral("connectionProfileSaveBtn"));
+    connectionProfileDeleteBtn = new QPushButton(tr("Delete"), ui->groupConnection);
+    connectionProfileDeleteBtn->setObjectName(QStringLiteral("connectionProfileDeleteBtn"));
+
+    QHBoxLayout *profileButtons = new QHBoxLayout;
+    profileButtons->setContentsMargins(0, 0, 0, 0);
+    profileButtons->addWidget(connectionProfileSaveBtn);
+    profileButtons->addWidget(connectionProfileDeleteBtn);
+
+    ui->verticalLayout_5->insertWidget(0, profileLabel);
+    ui->verticalLayout_5->insertWidget(1, connectionProfileCombo);
+    ui->verticalLayout_5->insertLayout(2, profileButtons);
+
+    const auto emitSelectedProfile = [this](int index) {
+        if (!updatingUIFromPrefs && index >= 0)
+        {
+            const QString name = connectionProfileCombo->itemText(index).trimmed();
+            if (!name.isEmpty())
+                emit connectionProfileSelected(name);
+        }
+    };
+
+    connect(connectionProfileCombo, QOverload<int>::of(&QComboBox::activated), this, emitSelectedProfile);
+    connect(connectionProfileCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, emitSelectedProfile);
+    connect(connectionProfileCombo, &QComboBox::textActivated, this, [this](const QString& text) {
+        if (!updatingUIFromPrefs)
+        {
+            const int index = connectionProfileCombo->findText(text.trimmed());
+            if (index >= 0)
+                emit connectionProfileSelected(connectionProfileCombo->itemText(index).trimmed());
+        }
+    });
+    connect(connectionProfileSaveBtn, &QPushButton::clicked, this, [this]() {
+        commitPendingEdits();
+        QString name = connectionProfileCombo->currentText().trimmed();
+        if (name.isEmpty())
+        {
+            bool ok = false;
+            name = QInputDialog::getText(this, tr("Save Connection Profile"),
+                                         tr("Profile name:"), QLineEdit::Normal,
+                                         QString(), &ok).trimmed();
+            if (!ok)
+                return;
+        }
+        if (!name.isEmpty())
+            emit connectionProfileSaveRequested(name);
+    });
+    connect(connectionProfileDeleteBtn, &QPushButton::clicked, this, [this]() {
+        const QString name = connectionProfileCombo->currentText();
+        if (!name.isEmpty())
+            emit connectionProfileDeleteRequested(name);
+    });
+}
+
+void settingswidget::commitPendingEdits()
+{
+    QWidget *editor = QApplication::focusWidget();
+    if (editor != Q_NULLPTR && editor != this)
+        editor->clearFocus();
+}
+
+void settingswidget::setConnectionProfiles(const QStringList& profileNames, const QString& currentProfile)
+{
+    if (connectionProfileCombo == Q_NULLPTR)
+        return;
+
+    updatingUIFromPrefs = true;
+    connectionProfileCombo->clear();
+    connectionProfileCombo->addItems(profileNames);
+
+    int index = currentProfile.isEmpty() ? -1 : connectionProfileCombo->findText(currentProfile);
+    if (index >= 0)
+    {
+        connectionProfileCombo->setCurrentIndex(index);
+    }
+    else
+    {
+        connectionProfileCombo->setCurrentIndex(-1);
+        connectionProfileCombo->setEditText(QString());
+    }
+
+    updatingUIFromPrefs = false;
+}
+
+QString settingswidget::currentConnectionProfileName() const
+{
+    if (connectionProfileCombo == Q_NULLPTR)
+        return QString();
+    return connectionProfileCombo->currentText().trimmed();
 }
 
 settingswidget::~settingswidget()
@@ -855,15 +971,15 @@ void settingswidget::updateRaPref(prefRaItem pra)
     switch(pra)
     {
     case ra_radioCIVAddr:
-        // It may be possible to ignore this value at this time.
-        // TODO
+        quietlyUpdateCheckbox(ui->rigCIVManualAddrChk, prefs->radioCIVAddr != 0);
         if(prefs->radioCIVAddr == 0)
         {
-            ui->rigCIVaddrHexLine->setText("auto");
-            ui->rigCIVaddrHexLine->setEnabled(false);
+            ui->rigCIVaddrCombo->setCurrentIndex(-1);
+            ui->rigCIVaddrCombo->setEditText("auto");
+            ui->rigCIVaddrCombo->setEnabled(false);
         } else {
-            ui->rigCIVaddrHexLine->setEnabled(true);
-            ui->rigCIVaddrHexLine->setText(QString("%1").arg(prefs->radioCIVAddr, 4, 16));
+            ui->rigCIVaddrCombo->setEnabled(true);
+            setCivComboToAddress(prefs->radioCIVAddr);
         }
         break;
     case ra_serialEnabled:
@@ -1700,32 +1816,137 @@ void settingswidget::on_pttTypeCombo_currentIndexChanged(int index)
 }
 
 
+void settingswidget::acceptRigListPtr(QHash<quint16,rigInfo> *rptr)
+{
+    rigList = rptr;
+}
+
+void settingswidget::refreshCivAddrList()
+{
+    populateCivAddrCombo();
+}
+
+void settingswidget::populateCivAddrCombo()
+{
+    static const struct { const char* name; quint8 addr; } icomModels[] = {
+        {"IC-703", 0x68}, {"IC-705", 0xA4}, {"IC-706", 0x58}, {"IC-718", 0x5E},
+        {"IC-736", 0x40}, {"IC-737", 0x3C}, {"IC-738", 0x44}, {"IC-746", 0x56},
+        {"IC-756", 0x50}, {"IC-756 Pro", 0x5C}, {"IC-756 Pro II", 0x64},
+        {"IC-756 Pro III", 0x6E}, {"IC-7000", 0x70}, {"IC-7100", 0x88},
+        {"IC-7200", 0x76}, {"IC-7300", 0x94}, {"IC-7410", 0x80},
+        {"IC-7600", 0x7A}, {"IC-7610", 0x98}, {"IC-7700", 0x74},
+        {"IC-7800", 0x6A}, {"IC-7850/7851", 0x8E}, {"IC-905", 0xAC},
+        {"IC-910H", 0x60}, {"IC-9100", 0x7C}, {"IC-9700", 0xA2},
+        {"IC-R8600", 0x96},
+    };
+
+    ui->rigCIVaddrCombo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    ui->rigCIVaddrCombo->blockSignals(true);
+    ui->rigCIVaddrCombo->clear();
+
+    if (rigList != Q_NULLPTR && !rigList->isEmpty())
+    {
+        QList<rigInfo> rigs = rigList->values();
+        std::sort(rigs.begin(), rigs.end(),
+                  [](const rigInfo& a, const rigInfo& b) { return a.model < b.model; });
+        for (const rigInfo& r : rigs)
+        {
+            if (r.civ == 0)
+                continue;
+            ui->rigCIVaddrCombo->addItem(QString("%1 (%2)").arg(r.model,
+                                         QString::number(r.civ, 16).toUpper()), r.civ);
+        }
+    }
+    else
+    {
+        for (const auto& m : icomModels)
+        {
+            ui->rigCIVaddrCombo->addItem(QString("%1 (%2)").arg(QString::fromLatin1(m.name),
+                                         QString::number(m.addr, 16).toUpper()), m.addr);
+        }
+    }
+    ui->rigCIVaddrCombo->setCurrentIndex(-1);
+    ui->rigCIVaddrCombo->blockSignals(false);
+
+    if (ui->rigCIVaddrCombo->view() != Q_NULLPTR)
+        ui->rigCIVaddrCombo->view()->setMinimumWidth(200);
+
+    const bool manualActive = prefs != Q_NULLPTR && prefs->radioCIVAddr != 0;
+    ui->rigCIVaddrCombo->setEnabled(manualActive);
+    if (manualActive)
+        setCivComboToAddress(prefs->radioCIVAddr);
+    else
+        ui->rigCIVaddrCombo->setEditText(QStringLiteral("auto"));
+}
+
+void settingswidget::setCivComboToAddress(quint16 addr)
+{
+    const int index = ui->rigCIVaddrCombo->findData(addr);
+    if (index >= 0)
+    {
+        ui->rigCIVaddrCombo->setCurrentIndex(index);
+    }
+    else
+    {
+        ui->rigCIVaddrCombo->setCurrentIndex(-1);
+        ui->rigCIVaddrCombo->setEditText(QString::number(addr, 16).toUpper());
+    }
+}
+
 void settingswidget::on_rigCIVManualAddrChk_clicked(bool checked)
 {
     if(checked)
     {
-        ui->rigCIVaddrHexLine->setEnabled(true);
-        ui->rigCIVaddrHexLine->setText(QString("%1").arg(prefs->radioCIVAddr, 4, 16));
+        ui->rigCIVaddrCombo->setEnabled(true);
+        setCivComboToAddress(prefs->radioCIVAddr);
     } else {
-        ui->rigCIVaddrHexLine->setText("auto");
-        ui->rigCIVaddrHexLine->setEnabled(false);
+        ui->rigCIVaddrCombo->setCurrentIndex(-1);
+        ui->rigCIVaddrCombo->setEditText("auto");
+        ui->rigCIVaddrCombo->setEnabled(false);
         prefs->radioCIVAddr = 0; // auto
     }
     emit changedRaPref(ra_radioCIVAddr);
 }
 
-void settingswidget::on_rigCIVaddrHexLine_editingFinished()
+void settingswidget::on_rigCIVaddrCombo_activated(int index)
 {
-    bool okconvert=false;
+    if (updatingUIFromPrefs || index < 0)
+        return;
 
-    quint8 propCIVAddr = (quint8) ui->rigCIVaddrHexLine->text().toUInt(&okconvert, 16);
-
-    if(!okconvert || propCIVAddr >= 0xe0 || propCIVAddr == 0)
-    {
-        ui->rigCIVaddrHexLine->setText("0");
-    }
-    prefs->radioCIVAddr = propCIVAddr;
+    prefs->radioCIVAddr = (quint16)ui->rigCIVaddrCombo->itemData(index).toUInt();
     emit changedRaPref(ra_radioCIVAddr);
+}
+
+void settingswidget::civAddrEditFinished()
+{
+    if (updatingUIFromPrefs || !ui->rigCIVaddrCombo->isEnabled())
+        return;
+
+    const QString text = ui->rigCIVaddrCombo->currentText().trimmed();
+    const int index = ui->rigCIVaddrCombo->findText(text);
+    quint16 propCIVAddr = 0;
+    bool okconvert = false;
+    if (index >= 0)
+    {
+        propCIVAddr = (quint16)ui->rigCIVaddrCombo->itemData(index).toUInt();
+        okconvert = true;
+    }
+    else
+    {
+        propCIVAddr = (quint16)text.toUInt(&okconvert, 16);
+    }
+
+    if(!okconvert || propCIVAddr == 0)
+    {
+        setCivComboToAddress(prefs->radioCIVAddr);
+        return;
+    }
+
+    if (propCIVAddr != prefs->radioCIVAddr)
+    {
+        prefs->radioCIVAddr = propCIVAddr;
+        emit changedRaPref(ra_radioCIVAddr);
+    }
 }
 
 void settingswidget::on_useCIVasRigIDChk_clicked(bool checked)
@@ -1899,10 +2120,10 @@ void settingswidget::on_manufacturerCombo_currentIndexChanged(int value)
         ui->serverCATPortLabel->setVisible(true);
         ui->serverScopePortLabel->setVisible(false);
 
-        ui->catPortLabel->setVisible(false);
-        ui->catPortTxt->setVisible(false);
-        ui->audioPortLabel->setVisible(false);
-        ui->audioPortTxt->setVisible(false);
+        ui->catPortLabel->setVisible(true);
+        ui->catPortTxt->setVisible(true);
+        ui->audioPortLabel->setVisible(true);
+        ui->audioPortTxt->setVisible(true);
         ui->scopePortLabel->setVisible(false);
         ui->scopePortTxt->setVisible(false);
 
@@ -1961,6 +2182,8 @@ void settingswidget::on_manufacturerCombo_currentIndexChanged(int value)
     ui->catPortTxt->setText(QString::number(udpPrefs->serialLANPort));
     ui->audioPortTxt->setText(QString::number(udpPrefs->audioLANPort));
     ui->scopePortTxt->setText(QString::number(udpPrefs->scopeLANPort));
+
+    populateCivAddrCombo();
 
     emit changedRaPref(ra_manufacturer);
 
@@ -3419,6 +3642,12 @@ void settingswidget::connectionStatus(bool conn)
     ui->audioSystemCombo->setEnabled(!conn);
     ui->audioSampleRateCombo->setEnabled(prefs->manufacturer==manufKenwood?false:!conn);
     ui->networkConnectionTypeCombo->setEnabled(!conn);
+    if (connectionProfileCombo != Q_NULLPTR)
+        connectionProfileCombo->setEnabled(!conn);
+    if (connectionProfileSaveBtn != Q_NULLPTR)
+        connectionProfileSaveBtn->setEnabled(!conn);
+    if (connectionProfileDeleteBtn != Q_NULLPTR)
+        connectionProfileDeleteBtn->setEnabled(!conn);
 
     ui->txLatencySlider->setEnabled(!conn);
     ui->usernameTxt->setEnabled(!conn);
@@ -3460,11 +3689,13 @@ void settingswidget::connectionStatus(bool conn)
 
 void settingswidget::on_connectBtn_clicked()
 {
+    commitPendingEdits();
     emit connectButtonPressed();
 }
 
 void settingswidget::on_saveSettingsBtn_clicked()
 {
+    commitPendingEdits();
     emit saveSettingsButtonPressed();
 }
 

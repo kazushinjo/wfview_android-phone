@@ -19,6 +19,7 @@ inline void androidFixDialogFocus(QWidget *dialog)
 #include <QGraphicsView>
 #include <QGraphicsProxyWidget>
 #include <QResizeEvent>
+#include <QShowEvent>
 #include <QTransform>
 #include <QHash>
 
@@ -42,14 +43,38 @@ protected:
     void resizeEvent(QResizeEvent *event) override
     {
         QGraphicsView::resizeEvent(event);
-        if (naturalSize.width() > 0 && naturalSize.height() > 0) {
-            const qreal sx = qreal(viewport()->width()) / qreal(naturalSize.width());
-            const qreal sy = qreal(viewport()->height()) / qreal(naturalSize.height());
+        refit();
+    }
+
+    void showEvent(QShowEvent *event) override
+    {
+        QGraphicsView::showEvent(event);
+        refit();
+    }
+
+private:
+    // The wrapped widget's layout can legitimately grow after wrapping
+    // (combo boxes get populated, rows become visible, controls are
+    // inserted), so the size captured at wrap time goes stale and the
+    // widget's lower part would be scaled out of view. Re-read the live
+    // size from the scene on every fit instead.
+    void refit()
+    {
+        QSizeF s = naturalSize;
+        if (scene() != Q_NULLPTR) {
+            const QRectF r = scene()->itemsBoundingRect();
+            if (!r.isEmpty()) {
+                s = r.size();
+                setSceneRect(QRectF(QPointF(0, 0), s));
+            }
+        }
+        if (s.width() > 0 && s.height() > 0) {
+            const qreal sx = qreal(viewport()->width()) / s.width();
+            const qreal sy = qreal(viewport()->height()) / s.height();
             setTransform(QTransform::fromScale(sx, sy));
         }
     }
 
-private:
     QSize naturalSize;
 };
 
