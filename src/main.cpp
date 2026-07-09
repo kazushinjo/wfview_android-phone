@@ -128,9 +128,34 @@ protected:
     void resizeEvent(QResizeEvent *event) override
     {
         QGraphicsView::resizeEvent(event);
-        if (naturalSize.width() > 0 && naturalSize.height() > 0) {
-            const qreal sx = qreal(viewport()->width()) / qreal(naturalSize.width());
-            const qreal sy = qreal(viewport()->height()) / qreal(naturalSize.height());
+        refit();
+    }
+
+    void showEvent(QShowEvent *event) override
+    {
+        QGraphicsView::showEvent(event);
+        refit();
+    }
+
+public:
+    // The embedded central widget can end up larger than the reference
+    // size captured at startup (the proxy enforces the layout's minimum
+    // size, which grows as controls are added or rig-dependent groups
+    // appear), which clipped the right edge. Re-read the live size from
+    // the scene on every fit.
+    void refit()
+    {
+        QSizeF s = naturalSize;
+        if (scene() != Q_NULLPTR) {
+            const QRectF r = scene()->itemsBoundingRect();
+            if (!r.isEmpty()) {
+                s = r.size();
+                setSceneRect(QRectF(QPointF(0, 0), s));
+            }
+        }
+        if (s.width() > 0 && s.height() > 0) {
+            const qreal sx = qreal(viewport()->width()) / s.width();
+            const qreal sy = qreal(viewport()->height()) / s.height();
             setTransform(QTransform::fromScale(sx, sy));
         }
     }
@@ -412,9 +437,13 @@ int main(int argc, char *argv[])
     QWidget *central = w.takeCentralWidget();
 
     QGraphicsScene *scene = new QGraphicsScene();
-    scene->addWidget(central);
+    QGraphicsProxyWidget *proxy = scene->addWidget(central);
 
     FitToScreenView *view = new FitToScreenView(scene, naturalSize);
+    // Track later growth of the embedded widget (rig-dependent groups
+    // appearing after connect, etc.) so nothing gets scaled off-screen.
+    QObject::connect(proxy, &QGraphicsWidget::geometryChanged, view,
+                     [view]() { view->refit(); });
     view->setFrameShape(QFrame::NoFrame);
     view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);

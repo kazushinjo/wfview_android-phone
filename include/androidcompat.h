@@ -52,7 +52,7 @@ protected:
         refit();
     }
 
-private:
+public:
     // The wrapped widget's layout can legitimately grow after wrapping
     // (combo boxes get populated, rows become visible, controls are
     // inserted), so the size captured at wrap time goes stale and the
@@ -75,6 +75,7 @@ private:
         }
     }
 
+private:
     QSize naturalSize;
 };
 
@@ -101,9 +102,13 @@ inline QWidget *androidFitToScreen(QWidget *w)
     QSize naturalSize = w->size();
 
     QGraphicsScene *scene = new QGraphicsScene();
-    scene->addWidget(w);
+    QGraphicsProxyWidget *proxy = scene->addWidget(w);
 
     AndroidFitToScreenView *view = new AndroidFitToScreenView(scene, naturalSize);
+    // Track later growth of the embedded widget so nothing gets scaled
+    // off-screen.
+    QObject::connect(proxy, &QGraphicsWidget::geometryChanged, view,
+                     [view]() { view->refit(); });
     view->setFrameShape(QFrame::NoFrame);
     view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
