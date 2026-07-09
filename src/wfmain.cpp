@@ -83,6 +83,15 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     // RIT controls grouped beneath it. The tuning step is chosen by tapping
     // a frequency digit, so the desktop step combo is hidden.
     ui->tuningStepCombo->hide();
+    // These groups depend on the connected radio's capabilities. Keeping the
+    // Designer defaults visible before capability discovery gives the main
+    // window a minimum width larger than the landscape viewport.
+    ui->scopeSettingsGroup->hide();
+    ui->preampAttGroup->hide();
+    ui->antennaGroup->hide();
+    // Move the tuning dial column to the right-hand side of the control row.
+    ui->horizontalLayout_2->removeItem(ui->tuningLayout);
+    ui->horizontalLayout_2->insertLayout(4, ui->tuningLayout);
     ui->freqDial->setFixedSize(140, 140);
     ui->freqDial->setStyleSheet(
         QStringLiteral("QDial { background-color: #f6d6a8; border-radius: 70px; }"));
@@ -90,8 +99,10 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     frequencyDialLabel->setObjectName(QStringLiteral("frequencyDialLabel"));
     frequencyDialLabel->setAlignment(Qt::AlignCenter);
     ui->tuningLayout->insertWidget(0, frequencyDialLabel);
+    ui->tuningLayout->setContentsMargins(30, 20, 0, 0);
     ui->tuningLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
     ui->tuningLayout->setAlignment(ui->freqDial, Qt::AlignCenter);
+    ui->tuningLayout->insertSpacing(2, 10);
 
     QHBoxLayout *fineLockLayout = new QHBoxLayout;
     fineLockLayout->setContentsMargins(0, 0, 0, 0);
@@ -179,7 +190,7 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
         ui->cwButton, ui->rptSetupBtn, ui->memoriesBtn,
         ui->dualWatchBtn, ui->scopeDualBtn, ui->scopeMainSubBtn,
         ui->splitBtn, ui->swapMainSubBtn, ui->mainEqualsSubBtn,
-        ui->aboutBtn, ui->showSettingsBtn, ui->saveSettingsBtn,
+        ui->showSettingsBtn, ui->saveSettingsBtn,
         ui->radioStatusBtn, ui->showLogBtn, ui->showBandsBtn,
         ui->showFreqBtn, ui->rigCreatorBtn, ui->TXaudioProcBtn,
         ui->RXaudioProcBtn, ui->connectBtn, ui->exitBtn

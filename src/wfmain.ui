@@ -181,8 +181,66 @@
             </layout>
            </item>
            <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_27">
-             <item>
+            <layout class="QGridLayout" name="powerControlGrid">
+             <item row="0" column="0">
+              <widget class="QCheckBox" name="tuneLockChk">
+               <property name="accessibleName">
+                <string>Frequency Lock</string>
+               </property>
+               <property name="text">
+                <string>F Lock</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <layout class="QHBoxLayout" name="horizontalLayout_25">
+               <item>
+                <widget class="QDial" name="ritTuneDial">
+                 <property name="maximumSize">
+                  <size>
+                   <width>30</width>
+                   <height>30</height>
+                  </size>
+                 </property>
+                 <property name="accessibleName">
+                  <string>R I T Dial</string>
+                 </property>
+                 <property name="minimum">
+                  <number>-500</number>
+                 </property>
+                 <property name="maximum">
+                  <number>500</number>
+                 </property>
+                 <property name="singleStep">
+                  <number>10</number>
+                 </property>
+                 <property name="pageStep">
+                  <number>50</number>
+                 </property>
+                 <property name="invertedAppearance">
+                  <bool>false</bool>
+                 </property>
+                 <property name="notchTarget">
+                  <double>10.000000000000000</double>
+                 </property>
+                 <property name="notchesVisible">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="ritEnableChk">
+                 <property name="accessibleName">
+                  <string>R I T Enable</string>
+                 </property>
+                 <property name="text">
+                  <string>RIT</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item row="1" column="0">
               <widget class="QPushButton" name="rigPowerOnBtn">
                <property name="focusPolicy">
                 <enum>Qt::NoFocus</enum>
@@ -195,7 +253,7 @@
                </property>
               </widget>
              </item>
-             <item>
+             <item row="1" column="1">
               <widget class="QPushButton" name="rigPowerOffBtn">
                <property name="focusPolicy">
                 <enum>Qt::NoFocus</enum>
@@ -227,14 +285,14 @@
              </property>
              <property name="minimumSize">
               <size>
-               <width>60</width>
-               <height>60</height>
+               <width>130</width>
+               <height>130</height>
               </size>
              </property>
              <property name="maximumSize">
               <size>
-               <width>80</width>
-               <height>80</height>
+               <width>190</width>
+               <height>190</height>
               </size>
              </property>
              <property name="accessibleName">
@@ -273,64 +331,6 @@
              </property>
             </widget>
            </item>
-           <item>
-            <widget class="QCheckBox" name="tuneLockChk">
-             <property name="accessibleName">
-              <string>Frequency Lock</string>
-             </property>
-             <property name="text">
-              <string>F Lock</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_25">
-             <item>
-              <widget class="QDial" name="ritTuneDial">
-               <property name="maximumSize">
-                <size>
-                 <width>30</width>
-                 <height>30</height>
-                </size>
-               </property>
-               <property name="accessibleName">
-                <string>R I T Dial</string>
-               </property>
-               <property name="minimum">
-                <number>-500</number>
-               </property>
-               <property name="maximum">
-                <number>500</number>
-               </property>
-               <property name="singleStep">
-                <number>10</number>
-               </property>
-               <property name="pageStep">
-                <number>50</number>
-               </property>
-               <property name="invertedAppearance">
-                <bool>false</bool>
-               </property>
-               <property name="notchTarget">
-                <double>10.000000000000000</double>
-               </property>
-               <property name="notchesVisible">
-                <bool>true</bool>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QCheckBox" name="ritEnableChk">
-               <property name="accessibleName">
-                <string>R I T Enable</string>
-               </property>
-               <property name="text">
-                <string>RIT</string>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </item>
           </layout>
          </item>
          <item>
@@ -351,7 +351,7 @@
            <item>
             <layout class="QHBoxLayout" name="levelsHorizontalLayout">
              <property name="spacing">
-              <number>6</number>
+              <number>2</number>
              </property>
              <property name="sizeConstraint">
               <enum>QLayout::SetDefaultConstraint</enum>
@@ -695,6 +695,22 @@
             </layout>
            </item>
            <item>
+            <spacer name="otherControlsTopSpacer">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeType">
+              <enum>QSizePolicy::Fixed</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>14</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
             <widget class="QGroupBox" name="OtherControlsGrp">
              <property name="title">
               <string>Other Controls</string>
@@ -707,7 +723,7 @@
                <number>0</number>
               </property>
               <property name="topMargin">
-               <number>3</number>
+               <number>10</number>
               </property>
               <property name="rightMargin">
                <number>0</number>
@@ -835,7 +851,7 @@
               <string>Transmit and Receive button</string>
              </property>
              <property name="text">
-              <string>Transmit</string>
+              <string>送信</string>
              </property>
             </widget>
            </item>
@@ -864,7 +880,7 @@
               <string>Start the automatic antenna tuner cycle</string>
              </property>
              <property name="text">
-              <string>Tune</string>
+              <string>TUNE</string>
              </property>
             </widget>
            </item>
@@ -1027,7 +1043,7 @@
                      <enum>Qt::NoFocus</enum>
                     </property>
                     <property name="text">
-                     <string>Main&lt;&gt;Sub</string>
+                     <string>Swap</string>
                     </property>
                    </widget>
                   </item>
@@ -1212,16 +1228,6 @@
         <number>1</number>
        </property>
        <item>
-        <widget class="QPushButton" name="aboutBtn">
-         <property name="focusPolicy">
-          <enum>Qt::NoFocus</enum>
-         </property>
-         <property name="text">
-          <string>About</string>
-         </property>
-        </widget>
-       </item>
-       <item>
         <widget class="QPushButton" name="showSettingsBtn">
          <property name="focusPolicy">
           <enum>Qt::NoFocus</enum>
@@ -1237,7 +1243,7 @@
           <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
-          <string>Save Settings</string>
+          <string>Save</string>
          </property>
         </widget>
        </item>
@@ -1247,7 +1253,7 @@
           <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
-          <string>Radio Status</string>
+          <string>Status</string>
          </property>
         </widget>
        </item>
@@ -1277,7 +1283,7 @@
           <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
-          <string>Frequency</string>
+          <string>Freq</string>
          </property>
         </widget>
        </item>
@@ -1287,7 +1293,7 @@
           <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
-          <string>Rig Creator</string>
+          <string>Rig Edit</string>
          </property>
         </widget>
        </item>
@@ -1300,7 +1306,7 @@
           <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
-          <string>TX Audio Proc</string>
+          <string>TX Proc</string>
          </property>
         </widget>
        </item>
@@ -1313,7 +1319,7 @@
           <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
-          <string>RX Audio Proc</string>
+          <string>RX Proc</string>
          </property>
         </widget>
        </item>
@@ -1336,7 +1342,7 @@
           <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
-          <string>Connect to Radio</string>
+          <string>Connect</string>
          </property>
         </widget>
        </item>
@@ -1365,7 +1371,7 @@
           <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
-          <string> Exit Program</string>
+          <string>Exit</string>
          </property>
         </widget>
        </item>
