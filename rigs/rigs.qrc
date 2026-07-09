@@ -1,0 +1,35 @@
+<RCC>
+    <qresource prefix="/rigs">
+        <file>DEFAULT-ICOM.rig</file>
+        <file>DEFAULT-KENWOOD.rig</file>
+        <file>FT-710.rig</file>
+        <file>FTX-1.rig</file>
+        <file>IC-705.rig</file>
+        <file>IC-706.rig</file>
+        <file>IC-706MK2G.rig</file>
+        <file>IC-7100.rig</file>
+        <file>IC-718.rig</file>
+        <file>IC-7200.rig</file>
+        <file>IC-7300.rig</file>
+        <file>IC-7300MK2.rig</file>
+        <file>IC-746.rig</file>
+        <file>IC-746PRO.rig</file>
+        <file>IC-756.rig</file>
+        <file>IC-756PRO.rig</file>
+        <file>IC-756PROII.rig</file>
+        <file>IC-756PROIII.rig</file>
+        <file>IC-7600.rig</file>
+        <file>IC-7610.rig</file>
+        <file>IC-7760.rig</file>
+        <file>IC-785x.rig</file>
+        <file>IC-905.rig</file>
+        <file>IC-9100.rig</file>
+        <file>IC-9700.rig</file>
+        <file>IC-R7100.rig</file>
+        <file>IC-R8500.rig</file>
+        <file>IC-R8600.rig</file>
+        <file>ID-31.rig</file>
+        <file>TS-590SG.rig</file>
+        <file>TS-890S.rig</file>
+    </qresource>
+</RCC>
