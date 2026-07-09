@@ -520,9 +520,14 @@ private:
     QTimer ConnectionTimer;
     QString currentConnectionProfile;
 #ifdef Q_OS_ANDROID
+    bool androidDoubleTapGuard(const QString& actionName);
+    QHash<QString, qint64> androidTapArm;
+    QHash<QWidget*, QWidget*> androidMainWindowEmbeds;
     QWidget *androidHelpWindow = nullptr;
     class QPushButton *androidLockButton = nullptr;
     bool androidFineTuning = false; // Force the frequency dial to 1 Hz steps.
+    class QSlider *androidWfLevelSlider = nullptr; // waterfall colour floor, in RF/AF slider group
+    class QLabel *androidWfLevelLabel = nullptr;
 #endif
 
     QCustomPlot *plot; // line plot

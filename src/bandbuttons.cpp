@@ -277,6 +277,14 @@ void bandbuttons::bandStackBtnClick(availableBands band)
                         QVariant::fromValue<bandStackType>(bandStackType(b.bsr,ui->bandStkPopdown->currentIndex()+1)),false,uchar(0)));
                 }
                 requestedBand = band;
+#ifdef Q_OS_ANDROID
+                // Close the popup once a band is chosen; hide the wrapping
+                // fit-to-screen view, not just the inner widget.
+                if (window() != Q_NULLPTR)
+                    window()->hide();
+                else
+                    hide();
+#endif
                 break;
             }
         }

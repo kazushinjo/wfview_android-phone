@@ -126,13 +126,24 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
         qDebug() << "Adding VFO" << i << "on receiver" << receiver;
         if (i==0)
         {
+#ifdef Q_OS_ANDROID
+            // The whole layout is scaled down to the phone/tablet screen,
+            // so the desktop-sized frequency readout ends up tiny. Give it
+            // roughly the same share of the screen as the iPad port.
+            fr->setMinimumSize(640,64);
+            fr->setMaximumSize(640,64);
+#else
             fr->setMinimumSize(280,30);
             fr->setMaximumSize(280,30);
+#endif
             displayLayout->addWidget(fr);
             freqStepDownButton->setHidden(false);
             freqStepUpButton->setHidden(false);
+            displayLayout->addSpacing(12);
             displayLayout->addWidget(freqStepDownButton);
+            displayLayout->addSpacing(12);
             displayLayout->addWidget(freqStepUpButton);
+            displayLayout->addSpacing(12); // breathing room before the VFO button
             // Add the VFO buttons here.
             if (numVFO > 1) {
                 vfoSelectButton->setHidden(false);
@@ -171,8 +182,13 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
             displayRSpacer = new QSpacerItem(0,0,QSizePolicy::Expanding,QSizePolicy::Fixed);
             displayLayout->addSpacerItem(displayRSpacer);
         } else {
+#ifdef Q_OS_ANDROID
+            fr->setMinimumSize(360,40);
+            fr->setMaximumSize(360,40);
+#else
             fr->setMinimumSize(180,20);
             fr->setMaximumSize(180,20);
+#endif
             if (!rigCaps->hasCommand29 && receiver == 1)
             {
                 fr->setVisible(false);
@@ -181,6 +197,11 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
         }
         connect(fr, &freqCtrl::newFrequency, this, [=](const qint64 &freq) {
             this->newFrequency(freq,i);
+        });
+        // Android: tapping a digit of the frequency display chooses the
+        // tuning step; update stepSize so the dial and step buttons use it.
+        connect(fr, &freqCtrl::stepSizeSelected, this, [=](qint64 hz) {
+            if (hz > 0) stepSize = (quint64)hz;
         });
 
         freqDisplay.append(fr);
@@ -748,7 +769,7 @@ void receiverWidget::changeWfLength(uint wf)
 
     colorMap->data()->setValueRange(QCPRange(0, wfLength-1));
     colorMap->data()->setKeyRange(QCPRange(0, spectWidth-1));
-    colorMap->setDataRange(QCPRange(plotFloor, plotCeiling));
+    colorMap->setDataRange(QCPRange(wfFloor, wfCeiling));
     colorMap->setGradient(static_cast<QCPColorGradient::GradientPreset>(currentTheme));
 
     if(colorMapData != Q_NULLPTR)
@@ -796,7 +817,7 @@ bool receiverWidget::prepareWf(uint wf)
 
     colorMap->data()->setValueRange(QCPRange(0, wfLength-1));
     colorMap->data()->setKeyRange(QCPRange(0, spectWidth-1));
-    colorMap->setDataRange(QCPRange(plotFloor, plotCeiling));
+    colorMap->setDataRange(QCPRange(wfFloor, wfCeiling));
     colorMap->setGradient(static_cast<QCPColorGradient::GradientPreset>(currentTheme));
 
     if(colorMapData != Q_NULLPTR)
@@ -822,13 +843,13 @@ void receiverWidget::setRange(int floor, int ceiling)
 {
     plotFloor = floor;
     plotCeiling = ceiling;
-    wfFloor = floor;
-    wfCeiling = ceiling;
+    // The waterfall floor is independent (set only via setWfRange), so
+    // setRange must not touch wfFloor/wfCeiling or the colour map here -- doing
+    // so would reset the user's waterfall level whenever the spectrum range is
+    // set.
     maxAmp = ceiling;
     if (spectrum != Q_NULLPTR)
         spectrum->yAxis->setRange(QCPRange(floor, ceiling));
-    if (colorMap != Q_NULLPTR)
-        colorMap->setDataRange(QCPRange(floor,ceiling));
     configBottom->blockSignals(true);
     configBottom->setValue(floor);
     configBottom->blockSignals(false);
@@ -843,6 +864,19 @@ void receiverWidget::setRange(int floor, int ceiling)
         b.line->end->setCoords(b.line->end->coords().x(), spectrum->yAxis->range().upper-5);
         b.text->position->setCoords(b.text->position->coords().x(), spectrum->yAxis->range().upper-10);
     }
+}
+
+// Adjust only the waterfall colour range (wfFloor/wfCeiling), leaving the
+// spectrum plot floor/ceiling untouched. The colour map is refreshed
+// immediately so the change is visible without waiting for new spectrum data.
+void receiverWidget::setWfRange(int floor, int ceiling)
+{
+    wfFloor = floor;
+    wfCeiling = ceiling;
+    if (colorMap != Q_NULLPTR)
+        colorMap->setDataRange(QCPRange(floor, ceiling));
+    if (waterfall != Q_NULLPTR)
+        waterfall->replot();
 }
 
 void receiverWidget::colorPreset(colorPrefsType *cp)

@@ -1,154 +1,46 @@
-# wfview
+# wfview for Android
 
+Icom リグ用コントロールソフト **wfview** の Android タブレット移植版です（arm64-v8a、ネットワーク接続専用）。
+IC-7300（Raspberry Pi 等の wfserver 経由）や IC-9700/IC-705 などの LAN 対応リグへ Wi-Fi で接続し、
+スペクトラム／ウォーターフォール表示・同調・送受信・音声処理をタブレットから操作できます。
 
-[wfview](https://gitlab.com/eliggett/wfview) is an open-soure Ham Radio control application, serving both modern SDR and SDR-hybrid type radios as well as a variety of older radios. Wfview supports modern Kenwood, Icom, and Yaesu radios, and runs on Linux, macOS, and Windows operating systems.
+本リポジトリは [wfview](https://wfview.org/)（GPLv3）のフォークです。作業ブランチは `android-port` です。
 
-website - [WFVIEW](https://wfview.org/) wfview.org
+## 主な特徴（デスクトップ版からの変更点）
 
-source code: [gitlab](https://gitlab.com/eliggett/wfview/)
+- **タッチ操作向けメイン画面**（横向き固定）
+  - 大型の周波数表示＋桁タップで同調ステップ選択、▼／▲ステップボタン（長押しで連続）
+  - 薄橙色の大型周波数ダイアル、Fine（1 Hz）／Lock（ロック中はステップボタンもグレーアウト）
+  - レベルスライダー列に **WF**（ウォーターフォールの色レベル）を追加、AF スライダーは端末のメディア音量と連動
+  - 電源 ON/OFF・終了は誤操作防止の**ダブルタップ実行**（確認ダイアログなし）
+  - 画面最下段に受信遅延（rx latency）／rtt／ロス／リグ名を常時表示
+- **接続プロファイル**: 複数リグの接続先（ホスト・ポート・CI-V・音声設定）を保存して切替
+- **CI-V アドレスのモデル別プルダウン**（メーカー連動）
+- **日本語操作説明書を同梱**（メイン画面の「ヘルプ」ボタン、`docs/help_ja.md`）
+- **Android 固有の対策**
+  - Qt 6.8 Android の QAudioSink プッシュモード不具合を回避する受信音声の**プルモード実装**（リングバッファ）
+  - デスクトップ設計の各画面を画面いっぱいに等倍スケールする fit-to-screen 表示（ポップアップは等比縮尺）
 
-![wfview screenshot](screenshots/wfview-main.png)
+## ビルド
 
-**For screenshots, documentation, User FAQ, Programmer FAQ, and more, please [see the project's website, wfview.org](https://wfview.org/).**
+macOS ホストでのビルド手順は [`ANDROID_BUILD_NOTES_MAC.md`](ANDROID_BUILD_NOTES_MAC.md)、
+Windows ホストは [`ANDROID_BUILD_NOTES.md`](ANDROID_BUILD_NOTES.md) を参照してください。
 
-Links for Users: 
-- [Getting Started](https://wfview.org/wfview-user-manual/getting-started/)
-- [FAQ](https://wfview.org/wfview-user-manual/faq/)
-- [User Manual](https://wfview.org/wfview-user-manual/)
-- [Support Forum](https://forum.wfview.org/)
-- [Patreon](https://www.patreon.com/wfview)
+- Qt 6.8.1（android_arm64_v8a）+ NDK r27（27.3.13750724）+ JDK 17
+- 依存: eigen / opus（NDK ビルドの静的ライブラリ）/ qcustomplot 2.1.1 / r8brain-free-src（クローンの兄弟ディレクトリに配置）
+- `qmake wfview.pro -spec android-clang` → `make` → `androiddeployqt6` で APK を生成
 
-Links for Developers: 
-- [Developer's Corner](https://wfview.org/developers/)
-- [Compiler Script for Debian-based Linux](https://gitlab.com/eliggett/scripts/-/blob/master/fullbuild-wfview.sh)
-- [Public Automated Builds](https://wfview.org/developers/)
-- [Source Code](https://gitlab.com/eliggett/wfview/)
-- [GitHub beta builds (macOS and linux AppImage)](https://github.com/eliggett/wfview/releases)
+## 動作環境
 
+- Android タブレット（arm64-v8a、横向き 2000x1200 クラスで調整済み）
+- Icom LAN 対応リグ（IC-9700/IC-705/IC-7610 等）または wfserver（IC-7300 等）
 
-wfview is copyright 2017-2026 Elliott H. Liggett (W6EL) and Phil Taylor (M0VSE). All rights reserved. wfview source code is licensed via the GNU GPLv3.
+## ドキュメント
 
-## Credits and 3rd party code
+- 操作説明書（日本語）: [`docs/help_ja.md`](docs/help_ja.md)（アプリ内「ヘルプ」からも閲覧可）
+- Word 版: `docs/help_ja.docx`
 
-Source code and issues managed by Roeland Jansen, PA3MET 
+## ライセンス
 
-Testing and development mentorship from Jim Nijkamp, PA8E.
-
-Special thanks to Tony Collen, N0RUA/AE0KW (SK), for his work on open890, which was the inspiration for our support of the Kenwood TS-890. 
-
-Special thanks to our translators:
-- Siwij Cat TA1YEP (Turkish)
-- OK2HAM (Czech)
-- JG3HLX (Japanese)
-- Dawid SQ6EMM (Polish)
-- Jim PA8E (Dutch)
-- David Acacio EA3IPX (Spanish)
-
-The developers of wfview wish to thank the many contributions from the wfview community at-large, including ideas, bug reports, and fixes.
-
-Stylesheet qdarkstyle used under MIT license, stored in /usr/share/wfview/stylesheets/. 
-
-Speex Resample library and DSP noise reduction code Copyright 2003-2008 Jean-Marc Valin 
-
-RT Audio, from Gary P. Scavone
-
-Port Audio, from The Port Audio Community
-
-Special thanks to Norbert Varga (HA2NON), Akos Marton (ES1AKOS), and the nonoo/kappanhang team for their initial work on the OEM Icom protocol.
-
-Many thanks to KB3MMW who assisted with the reverse enginering of the Yaesu LAN protocol. Portions of his code which he has released under LGPL/GPL have been integrated within wfview Forum post
-
-The waterfall and spectrum plot graphics use QCustomPlot, from Emanuel Eichhammer
-
-Dyson Compressor (c) 1996, John S. Dyson. Redistribution of the Dyson Compressor requires this copyright notice.
-
-Multiband EQ, "Triple Para EQ" and Gate 1410 processors (c) Steve Harris, GNU/GPL licensed.
-
-PocketFFT is from Martin Reinecke and used under a BSD 3-Clause New or Revised License. It is (c) 2010-2019 Max-Planck-Society and is based on FFT Pack (FORTRAN) which was written by Paul N. Swarztrauber in 1985, and is copyright by the National Center for Atmospheric Research, Boulder, CO
-
-Audacity Noise Reduction algorithm from here is from Dominic Mazzoni, rewritten by Paul Licameli, with modifications for wfview's streaming usage. The license is GNU/GPL.
-
-wfview contains our own implementation of the Hamlib rigctl protocol which uses portions of code from Hamlib, which are Copyright (C) 2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011,2012 The Hamlib Group
-
-wfview contains the adpcm-xq audio encoder/decoder - Copyright (c) David Bryant All rights reserved.
-
-Speex copyright notice:
-Copyright (C) 2003 Jean-Marc Valin
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
-- Redistributions of source code must retain the above copyright
-notice, this list of conditions and the following disclaimer.
-- Redistributions in binary form must reproduce the above copyright
-notice, this list of conditions and the following disclaimer in the
-documentation and/or other materials provided with the distribution.
-- Neither the name of the Xiph.org Foundation nor the names of its
-contributors may be used to endorse or promote products derived from
-this software without specific prior written permission.
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR
-CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-/** Frequency controller widget (originally from CuteSDR)
-*
-* This code is used within wfview and was modified
-* You can download the source code from here: 
-* https://gitlab.com/eliggett/wfview/
-*
-* Copyright 2010 Moe Wheatley AE4JY 
-* Copyright 2012-2017 Alexandru Csete OZ9AEC
-* Copyright 2024 Phil Taylor M0VSE
-* All rights reserved.
-*
-* This software is released under the "Simplified BSD License".
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the following conditions are met:
-*
-* 1. Redistributions of source code must retain the above copyright notice,
-*    this list of conditions and the following disclaimer.
-*
-* 2. Redistributions in binary form must reproduce the above copyright notice,
-*    this list of conditions and the following disclaimer in the documentation
-*    and/or other materials provided with the distribution.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-* POSSIBILITY OF SUCH DAMAGE.
-*/
-
-/**
-* FT4222 support library (for FT-710 SPI support)
-*
-* Copyright (c) 2001-2015 Future Technology Devices International Limited
-*
-* THIS SOFTWARE IS PROVIDED BY FUTURE TECHNOLOGY DEVICES INTERNATIONAL LIMITED "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-* OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
-* FUTURE TECHNOLOGY DEVICES INTERNATIONAL LIMITED BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-* SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
-* OF SUBSTITUTE GOODS OR SERVICES LOSS OF USE, DATA, OR PROFITS OR BUSINESS INTERRUPTION)
-* HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
-* TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
-* EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*
-* FTDI DRIVERS MAY BE USED ONLY IN CONJUNCTION WITH PRODUCTS BASED ON FTDI PARTS.
-*
-* FTDI DRIVERS MAY BE DISTRIBUTED IN ANY FORM AS LONG AS LICENSE INFORMATION IS NOT MODIFIED.
-*/
+GNU GPLv3。Copyright 2017- Elliott H. Liggett (W6EL), Phil E. Taylor (M0VSE) ほか wfview 開発チーム、
+および本 Android 移植の変更部分の著作者。詳細は [LICENSE](LICENSE) を参照してください。

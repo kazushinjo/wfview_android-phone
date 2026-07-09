@@ -83,6 +83,22 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     // RIT controls grouped beneath it. The tuning step is chosen by tapping
     // a frequency digit, so the desktop step combo is hidden.
     ui->tuningStepCombo->hide();
+    // Cap the scope area (spectrum + waterfall) so the frequency readout and
+    // the control rows below keep a usable share of the screen.
+    ui->scopeVFOGroup->setMaximumHeight(760);
+    // Narrow the main control button column (transmit, tune, CW, repeater,
+    // memory); full-width buttons crowd the middle of the screen.
+    const QList<QPushButton*> controlColButtons = {
+        ui->transmitBtn, ui->tuneNowBtn, ui->cwButton,
+        ui->rptSetupBtn, ui->memoriesBtn
+    };
+    for (QPushButton *cb : controlColButtons)
+        cb->setMaximumWidth(300);
+    // Keep the S/SWR meters compact; unconstrained they stretch across the
+    // freed-up width and dwarf the other controls.
+    ui->meterSPoWidget->setMaximumWidth(420);
+    ui->meter2Widget->setMaximumWidth(420);
+    ui->meter3Widget->setMaximumWidth(420);
     // These groups depend on the connected radio's capabilities. Keeping the
     // Designer defaults visible before capability discovery gives the main
     // window a minimum width larger than the landscape viewport.
@@ -92,17 +108,21 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     // Move the tuning dial column to the right-hand side of the control row.
     ui->horizontalLayout_2->removeItem(ui->tuningLayout);
     ui->horizontalLayout_2->insertLayout(4, ui->tuningLayout);
-    ui->freqDial->setFixedSize(140, 140);
+    // Keep the preamp/attenuator group compact (wide enough for its title)
+    // and give the control columns an even horizontal rhythm.
+    ui->preampAttGroup->setMaximumWidth(410);
+    ui->horizontalLayout_2->setSpacing(28);
+    ui->freqDial->setFixedSize(260, 260);
     ui->freqDial->setStyleSheet(
-        QStringLiteral("QDial { background-color: #f6d6a8; border-radius: 70px; }"));
+        QStringLiteral("QDial { background-color: #f6d6a8; border-radius: 130px; }"));
     QLabel *frequencyDialLabel = new QLabel(QStringLiteral("周波数ダイアル"), ui->mainGroup);
     frequencyDialLabel->setObjectName(QStringLiteral("frequencyDialLabel"));
     frequencyDialLabel->setAlignment(Qt::AlignCenter);
     ui->tuningLayout->insertWidget(0, frequencyDialLabel);
-    ui->tuningLayout->setContentsMargins(30, 20, 0, 0);
+    ui->tuningLayout->setContentsMargins(30, 0, 0, 6);
     ui->tuningLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
     ui->tuningLayout->setAlignment(ui->freqDial, Qt::AlignCenter);
-    ui->tuningLayout->insertSpacing(2, 10);
+    ui->tuningLayout->insertSpacing(2, 4);
 
     QHBoxLayout *fineLockLayout = new QHBoxLayout;
     fineLockLayout->setContentsMargins(0, 0, 0, 0);
@@ -371,7 +391,116 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
 
     setDefaultColorPresets();
 
+#ifdef Q_OS_ANDROID
+    // Raise the level sliders: remove the expanding spacer above them so the
+    // tall sliders don't overlap the "Other Controls" label below.
+    ui->controlsLayout->removeItem(ui->verticalSpacer);
+    // Add a "WF" column to the RF/AF/SQL level-slider group: a vertical slider
+    // that sets the waterfall colour floor at runtime, independent of the
+    // spectrum. Mirrors the RF/AF/SQL columns (slider on top, label below).
+    {
+        QFont mg = ui->mainGroup->font();
+        mg.setPointSizeF(16.0);
+        mg.setBold(true);
+        QVBoxLayout *wfCol = new QVBoxLayout();
+        wfCol->setSpacing(6); // same slider-to-label gap as the .ui columns
+        androidWfLevelSlider = new QSlider(Qt::Vertical);
+        androidWfLevelSlider->setRange(0, 160);
+        androidWfLevelSlider->setValue(prefs.mainWfFloor); // finalised after loadSettings()
+        androidWfLevelSlider->setToolTip(QStringLiteral("ウォーターフォールの色レベル(floor)"));
+        // Match the RF/AF/SQL sliders: Fixed policy, 120px minimum height.
+        androidWfLevelSlider->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        androidWfLevelSlider->setMinimumHeight(120);
+        // Stretch the whole level-slider column set for easier finger control.
+        const QList<QSlider*> levelSliders = {
+            ui->rfGainSlider, ui->afGainSlider, ui->sqlSlider,
+            ui->micGainSlider, ui->txPowerSlider, ui->monitorSlider
+        };
+        for (QSlider *ls : levelSliders) {
+            // Same fixed height as the WF slider so the whole row lines up.
+            ls->setMinimumHeight(120);
+            ls->setMaximumHeight(120);
+            QSizePolicy sp = ls->sizePolicy();
+            sp.setVerticalPolicy(QSizePolicy::Fixed);
+            ls->setSizePolicy(sp);
+        }
+        // Center each slider over its label: the .ui leaves sliders
+        // left-aligned in their columns while the labels are centered.
+        for (int i = 0; i < ui->levelsHorizontalLayout->count(); ++i) {
+            QVBoxLayout *col = qobject_cast<QVBoxLayout*>(
+                ui->levelsHorizontalLayout->itemAt(i) ? ui->levelsHorizontalLayout->itemAt(i)->layout() : nullptr);
+            if (col == nullptr) continue;
+            for (int j = 0; j < col->count(); ++j) {
+                QWidget *cw = col->itemAt(j) ? col->itemAt(j)->widget() : nullptr;
+                if (cw != nullptr && qobject_cast<QSlider*>(cw) != nullptr)
+                    col->setAlignment(cw, Qt::AlignHCenter);
+            }
+        }
+        // Unify the level labels: the .ui caps them at 15px which clips the
+        // scaled-up font, and sizes varied between columns. Same font and
+        // height as the WF label for the whole row.
+        const QList<QLabel*> levelLabels = {
+            ui->rfGainLabel, ui->afGainLabel, ui->squelchLabel,
+            ui->modSliderLbl, ui->txPowerLabel, ui->monitorLabel
+        };
+        for (QLabel *ll : levelLabels) {
+            ll->setMinimumHeight(34);
+            ll->setMaximumHeight(40);
+            ll->setFont(mg);
+            ll->setAlignment(Qt::AlignHCenter);
+        }
+        androidWfLevelLabel = new QLabel(QStringLiteral("WF"));
+        androidWfLevelLabel->setAlignment(Qt::AlignHCenter);
+        androidWfLevelLabel->setFont(mg);
+        // Same label box as the other columns so the whole column lines up.
+        androidWfLevelLabel->setMinimumHeight(34);
+        androidWfLevelLabel->setMaximumHeight(40);
+        wfCol->addWidget(androidWfLevelSlider, 0, Qt::AlignHCenter);
+        wfCol->addWidget(androidWfLevelLabel, 0);
+        ui->levelsHorizontalLayout->addLayout(wfCol);
+        connect(androidWfLevelSlider, &QSlider::valueChanged, this, [this](int val){
+            prefs.mainWfFloor = val;
+            prefs.subWfFloor = val;
+            prefs.settingsChanged = true;
+            if(!receivers.isEmpty())
+                receivers.first()->setWfRange(val, prefs.mainPlotCeiling);
+            // Persist immediately so the value is applied on the next launch.
+            // Must match the "Interface" group that saveSettings()/loadSettings()
+            // use, or it won't be read back.
+            if(settings){
+                settings->beginGroup("Interface");
+                settings->setValue("MainWfFloor", val);
+                settings->setValue("SubWfFloor", val);
+                settings->endGroup();
+                settings->sync();
+            }
+        });
+    }
+    // A swipe-kill can drop settings writes that were only sync()'d
+    // mid-session. Flush whenever the app leaves the foreground.
+    connect(qApp, &QApplication::applicationStateChanged, this,
+            [this](Qt::ApplicationState state){
+        if(state != Qt::ApplicationActive && settings){
+            settings->beginGroup("Interface");
+            settings->setValue("MainWfFloor", prefs.mainWfFloor);
+            settings->setValue("SubWfFloor", prefs.subWfFloor);
+            settings->endGroup();
+            settings->sync();
+        }
+    });
+#endif
+
     loadSettings(); // Look for saved preferences
+#ifdef Q_OS_ANDROID
+    // The WF-level slider was built before loadSettings(); sync it to the saved
+    // value now (blocking signals so it doesn't overwrite prefs).
+    if(androidWfLevelSlider)
+    {
+        androidWfLevelSlider->blockSignals(true);
+        androidWfLevelSlider->setValue(prefs.mainWfFloor);
+        androidWfLevelSlider->blockSignals(false);
+    }
+#endif
     logWindow->ingestSettings(prefs);
 
     setManufacturer(prefs.manufacturer);
@@ -1084,22 +1213,35 @@ void wfmain::setupMainUI()
 
 
     rigStatus = new QLabel(this);
-    ui->statusBar->addPermanentWidget(rigStatus);
-    ui->statusBar->showMessage("Connecting to rig...", 1000);
-
     pttLed = new QLedLabel(this);
-    ui->statusBar->addPermanentWidget(pttLed);
-    pttLed->setState(QLedLabel::State::StateOk);
-    pttLed->setToolTip("Receiving");
-
     connectedLed = new QLedLabel(this);
-    ui->statusBar->addPermanentWidget(connectedLed);
-
     rigName = new QLabel(this);
+#ifdef Q_OS_ANDROID
+    // Keep the status readouts on the left where they are easy to spot;
+    // permanent widgets would sit at the far right edge.
+    ui->statusBar->setContentsMargins(400, 0, 0, 8);
+    ui->statusBar->setMinimumHeight(48);
+    ui->statusBar->addWidget(rigStatus);
+    ui->statusBar->addWidget(pttLed);
+    ui->statusBar->addWidget(connectedLed);
+    ui->statusBar->addWidget(rigName);
+    rigName->setAlignment(Qt::AlignLeft);
+#else
+    ui->statusBar->addPermanentWidget(rigStatus);
+    ui->statusBar->addPermanentWidget(pttLed);
+    ui->statusBar->addPermanentWidget(connectedLed);
     rigName->setAlignment(Qt::AlignRight);
     ui->statusBar->addPermanentWidget(rigName);
+#endif
+    ui->statusBar->showMessage("Connecting to rig...", 1000);
+    pttLed->setState(QLedLabel::State::StateOk);
+    pttLed->setToolTip("Receiving");
     rigName->setText("NONE");
+#ifdef Q_OS_ANDROID
+    rigName->setFixedWidth(100); // wide enough for e.g. "IC-7300"
+#else
     rigName->setFixedWidth(60);
+#endif
 
     freqt f;
     f.MHzDouble = 0.0;
@@ -1329,6 +1471,8 @@ void wfmain::configureVFOs()
         receiver->setScrollSpeedXY(prefs.scopeScrollX, prefs.scopeScrollY);
         receiver->prepareWf(i==0?prefs.mainWflength:prefs.subWflength);
         receiver->setRange(i==0?prefs.mainPlotFloor:prefs.subPlotFloor,i==0?prefs.mainPlotCeiling:prefs.subPlotCeiling);
+        // Waterfall colour floor is independent of the spectrum plot floor above.
+        receiver->setWfRange(i==0?prefs.mainWfFloor:prefs.subWfFloor,i==0?prefs.mainPlotCeiling:prefs.subPlotCeiling);
         receiver->wfTheme(i==0?prefs.mainWfTheme:prefs.subWfTheme);
         receiver->setClickDragTuning(prefs.clickDragTuningEnable);
         receiver->setTuningFloorZeros(prefs.niceTS);
@@ -2006,6 +2150,15 @@ void wfmain::setDefPrefs()
     defPrefs.mainWflength = 160;
     defPrefs.mainWfTheme = static_cast<int>(QCPColorGradient::gpJet);
     defPrefs.mainPlotFloor = 0;
+#ifdef Q_OS_ANDROID
+    // Waterfall colour floor: adjustable at runtime from the RF/AF slider group.
+    // Default 60 so noise is dark out of the box; persisted across launches.
+    defPrefs.mainWfFloor = 60;
+    defPrefs.subWfFloor = 60;
+#else
+    defPrefs.mainWfFloor = 0;
+    defPrefs.subWfFloor = 0;
+#endif
     defPrefs.mainPlotCeiling = 160;
     defPrefs.subWflength = 160;
     defPrefs.subWfTheme = static_cast<int>(QCPColorGradient::gpJet);
@@ -2110,6 +2263,8 @@ void wfmain::loadSettings()
     prefs.mainWfTheme = settings->value("MainWFTheme", defPrefs.mainWfTheme).toInt();
     prefs.subWfTheme = settings->value("SubWFTheme", defPrefs.subWfTheme).toInt();
     prefs.mainPlotFloor = settings->value("MainPlotFloor", defPrefs.mainPlotFloor).toInt();
+    prefs.mainWfFloor = settings->value("MainWfFloor", defPrefs.mainWfFloor).toInt();
+    prefs.subWfFloor = settings->value("SubWfFloor", defPrefs.subWfFloor).toInt();
     prefs.subPlotFloor = settings->value("SubPlotFloor", defPrefs.subPlotFloor).toInt();
     prefs.mainPlotCeiling = settings->value("MainPlotCeiling", defPrefs.mainPlotCeiling).toInt();
     prefs.subPlotCeiling = settings->value("SubPlotCeiling", defPrefs.subPlotCeiling).toInt();
@@ -3578,6 +3733,8 @@ void wfmain::saveSettings()
     settings->setValue("MainWFTheme", prefs.mainWfTheme);
     settings->setValue("SubWFTheme", prefs.subWfTheme);
     settings->setValue("MainPlotFloor", prefs.mainPlotFloor);
+    settings->setValue("MainWfFloor", prefs.mainWfFloor);
+    settings->setValue("SubWfFloor", prefs.subWfFloor);
     settings->setValue("SubPlotFloor", prefs.subPlotFloor);
     settings->setValue("MainPlotCeiling", prefs.mainPlotCeiling);
     settings->setValue("SubPlotCeiling", prefs.subPlotCeiling);
@@ -4260,6 +4417,11 @@ void wfmain::setAppTheme(bool isCustom)
                 sheet += QStringLiteral(
                     "QPushButton#transmitBtn { background-color: #81c784; color: white;"
                     " font-weight: bold; border-radius: 10px; padding: 4px 10px; }");
+                // Wider slider track and handle for finger operation.
+                sheet += QStringLiteral(
+                    "QSlider::groove:vertical { width: 12px; border-radius: 6px; }"
+                    "QSlider::handle:vertical { height: 26px; margin: 0 -6px;"
+                    " border-radius: 9px; }");
 #endif
                 qApp->setStyleSheet(sheet);
             }
@@ -4771,8 +4933,35 @@ void wfmain::on_tuneEnableChk_clicked(bool checked)
     ATUCheckTimer.start(5000);
 }
 
+#ifdef Q_OS_ANDROID
+// Double-tap guard for destructive buttons: the first tap arms the action
+// and shows a hint in the status bar, a second tap within the window runs
+// it. Replaces the desktop confirmation dialogs.
+bool wfmain::androidDoubleTapGuard(const QString& actionName)
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const qint64 prev = androidTapArm.value(actionName, 0);
+    if (now - prev <= 2500) {
+        androidTapArm.remove(actionName);
+        return true;
+    }
+    androidTapArm.insert(actionName, now);
+    showStatusBarText(QString("%1: もう一度タップすると実行します").arg(actionName));
+    return false;
+}
+#endif
+
 bool wfmain::on_exitBtn_clicked()
 {
+#ifdef Q_OS_ANDROID
+    // Double-tap to exit; unsaved settings are saved automatically.
+    if (!androidDoubleTapGuard(QStringLiteral("終了")))
+        return true; // treated as "cancelled" by callers
+    if (prefs.settingsChanged)
+        saveSettings();
+    QApplication::exit();
+    return false;
+#endif
     bool ret=false;
     if (prefs.settingsChanged && prefs.confirmSettingsChanged)
     {
@@ -5287,11 +5476,57 @@ void wfmain::showAndRaiseWidget(QWidget *w)
         return;
 
 #ifdef Q_OS_ANDROID
-    // Fit this window's fixed desktop-pixel layout exactly to the screen
-    // the same way wfmain's own central widget is handled (see
-    // androidcompat.h) -- w is reassigned to the wrapping view, which is
-    // what actually gets shown/raised/activated below.
-    w = androidFitToScreen(w);
+    // Fit this window's fixed desktop-pixel layout to the screen the same
+    // way wfmain's own central widget is handled (see androidcompat.h) --
+    // w is reassigned to the wrapping view, which is what actually gets
+    // shown/raised/activated below. The settings and help windows are
+    // designed to fill the screen; every other popup keeps its own
+    // proportions (uniform scale, letterboxed) so text stays compact.
+    const bool fillScreen = (w == setupui || w == androidHelpWindow);
+    // QMainWindow-based popups (repeater/split, CW sender) cannot be
+    // embedded whole: like wfmain itself, the QMainWindow keeps its own
+    // native surface and the proxy render never appears. Embed their
+    // central widget instead (detached once, cached).
+    if (!fillScreen) {
+        // Desktop-era .ui files fix many widths in pixels; the larger
+        // Android default font gets elided inside them. A smaller base font
+        // fits the designed boxes, and the uniform up-scaling below brings
+        // the text back to a comfortable size.
+        QFont popupFont = w->font();
+        popupFont.setPointSizeF(10.0);
+        w->setFont(popupFont);
+    }
+    if (QMainWindow *mw = qobject_cast<QMainWindow*>(w)) {
+        QWidget *&embed = androidMainWindowEmbeds[mw];
+        if (embed == Q_NULLPTR) {
+            mw->ensurePolished();
+            QWidget *central = mw->takeCentralWidget();
+            if (central != Q_NULLPTR) {
+                // Drop the designer's fixed desktop pixel sizes -- on the
+                // whole window and every child -- so the layouts can take
+                // their natural size for the current font. The fixed widths
+                // clip/elide the Android-sized text otherwise.
+                central->setMinimumSize(0, 0);
+                central->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+                const auto kids = central->findChildren<QWidget*>();
+                for (QWidget *kid : kids) {
+                    kid->setMinimumSize(0, 0);
+                    kid->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+                }
+                embed = central;
+            } else {
+                embed = mw;
+            }
+        }
+        w = embed;
+    }
+    w = androidFitToScreen(w, !fillScreen);
+    // Always present the wrapper full screen: a plain show() lets Android
+    // size the window arbitrarily and the scaled content gets cropped.
+    w->showFullScreen();
+    w->raise();
+    w->activateWindow();
+    return;
 #endif
 
     if(w->isMinimized())
@@ -5648,9 +5883,15 @@ void wfmain::on_rptSetupBtn_clicked()
         rpt->activateWindow();
         return;
     }
+#ifdef Q_OS_ANDROID
+    showAndRaiseWidget(rpt);
+    // Do not raise/activate the embedded widget itself: on Android that
+    // gives it a stray native surface and the popup never appears.
+#else
     rpt->show();
     rpt->raise();
     rpt->activateWindow();
+#endif
 }
 
 void wfmain::on_attSelCombo_activated(int index)
@@ -5743,11 +5984,21 @@ void wfmain::receiveBaudRate(quint32 baud)
 
 void wfmain::on_rigPowerOnBtn_clicked()
 {
+#ifdef Q_OS_ANDROID
+    if (!androidDoubleTapGuard(QStringLiteral("電源ON")))
+        return;
+#endif
     powerRigOn();
 }
 
 void wfmain::on_rigPowerOffBtn_clicked()
 {
+#ifdef Q_OS_ANDROID
+    // Double-tap instead of the confirmation dialog.
+    if (androidDoubleTapGuard(QStringLiteral("電源OFF")))
+        powerRigOff();
+    return;
+#endif
     // Are you sure?
     if (!prefs.confirmPowerOff) {
         powerRigOff();
@@ -6316,9 +6567,13 @@ void wfmain::on_cwButton_clicked()
             cw->activateWindow();
             return;
         }
+#ifdef Q_OS_ANDROID
+        showAndRaiseWidget(cw);
+#else
         cw->show();
         cw->raise();
         cw->activateWindow();
+#endif
     }
 }
 
@@ -6423,9 +6678,14 @@ void wfmain::on_TXaudioProcBtn_clicked()
                     audioProcWin, &AudioProcessingWidget::onSpectrumBins);
         }
     }
+#ifdef Q_OS_ANDROID
+    audioProcWin->setMinimumSize(1000, 760);
+    showAndRaiseWidget(audioProcWin);
+#else
     audioProcWin->show();
     audioProcWin->raise();
     audioProcWin->activateWindow();
+#endif
 }
 
 void wfmain::onAudioProcPrefsChanged(txAudioProcessingPrefs p)
@@ -6516,9 +6776,14 @@ void wfmain::on_RXaudioProcBtn_clicked()
                     rxAudioProcWin, &RxAudioProcessingWidget::onDebugCaptureComplete);
         }
     }
+#ifdef Q_OS_ANDROID
+    rxAudioProcWin->setMinimumSize(1000, 760);
+    showAndRaiseWidget(rxAudioProcWin);
+#else
     rxAudioProcWin->show();
     rxAudioProcWin->raise();
     rxAudioProcWin->activateWindow();
+#endif
 }
 
 void wfmain::onRxAudioProcPrefsChanged(rxAudioProcessingPrefs p)

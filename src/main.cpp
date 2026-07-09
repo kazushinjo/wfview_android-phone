@@ -3,6 +3,7 @@
 #include "keyboard.h"
 #else
 #include <QApplication>
+#include <QStatusBar>
 #include <QTranslator>
 #ifdef Q_OS_ANDROID
 #include <QGraphicsScene>
@@ -147,10 +148,13 @@ public:
     {
         QSizeF s = naturalSize;
         if (scene() != Q_NULLPTR) {
+            // Use the real bounding rect (its origin can be negative when a
+            // widget pokes left of the origin); anchoring at (0,0) would
+            // clip the left/top edge.
             const QRectF r = scene()->itemsBoundingRect();
             if (!r.isEmpty()) {
                 s = r.size();
-                setSceneRect(QRectF(QPointF(0, 0), s));
+                setSceneRect(r);
             }
         }
         if (s.width() > 0 && s.height() > 0) {
@@ -430,14 +434,39 @@ int main(int argc, char *argv[])
     // panel at its bare minimum, which left the waterfall reduced to a
     // sliver once that cramped layout was scaled up to fill the screen.
     w.ensurePolished();
-    w.resize(2400, 1400);
+    // Match the 5:3 aspect of the target screen (2000x1200): with the status
+    // bar (~48) and margins (~14) the container totals ~2400x1440, so the
+    // fit-to-screen transform scales both axes equally and circles (the
+    // tuning dial) stay circular.
+    w.resize(2400, 1378);
     if (w.layout())
         w.layout()->activate();
     const QSize naturalSize = w.size();
     QWidget *central = w.takeCentralWidget();
 
+    // The status bar (rx latency, connection messages) belongs to the
+    // QMainWindow, not the central widget, so it would never be shown on
+    // Android. Stack the two in a plain container and embed that instead.
+    QWidget *container = new QWidget();
+    QVBoxLayout *containerLayout = new QVBoxLayout(container);
+    // A small margin keeps edge-hugging widgets (meter scale, bottom row)
+    // from being clipped by the exact-fit scaling.
+    containerLayout->setContentsMargins(10, 2, 10, 12);
+    containerLayout->setSpacing(0);
+    containerLayout->addWidget(central, 1);
+    QStatusBar *mainStatusBar = w.statusBar();
+    mainStatusBar->setParent(container);
+    containerLayout->addWidget(mainStatusBar, 0);
+    // Re-apply the generous reference size to the container: embedding sizes
+    // the proxy from the layout minimum otherwise, collapsing the Expanding
+    // scope panel to a sliver (see the pre-size comment above).
+    container->setMinimumSize(naturalSize.width(),
+                              naturalSize.height() + mainStatusBar->sizeHint().height());
+    container->resize(container->minimumSize());
+    containerLayout->activate();
+
     QGraphicsScene *scene = new QGraphicsScene();
-    QGraphicsProxyWidget *proxy = scene->addWidget(central);
+    QGraphicsProxyWidget *proxy = scene->addWidget(container);
 
     FitToScreenView *view = new FitToScreenView(scene, naturalSize);
     // Track later growth of the embedded widget (rig-dependent groups

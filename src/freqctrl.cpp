@@ -539,6 +539,17 @@ void freqCtrl::mousePressEvent(QMouseEvent *event)
         {
             if (inRect(m_DigitInfo[i].dQRect, pt)) // if in i'th digit
             {
+#ifdef Q_OS_ANDROID
+                // On Android, tapping a digit selects it as the tuning step
+                // (used by the dial and the step buttons) and highlights it.
+                // Selecting a step must not change the current frequency.
+                {
+                    qint64 w = m_DigitInfo[i].weight;
+                    setActiveDigit(i);
+                    updateCtrl(true);
+                    emit stepSizeSelected(w);
+                }
+#else
                 if (m_LRMouseFreqSel)
                 {
                     incFreq();
@@ -550,6 +561,7 @@ void freqCtrl::mousePressEvent(QMouseEvent *event)
                     else
                         decFreq();                                   // bottom half
                 }
+#endif
             }
         }
     }

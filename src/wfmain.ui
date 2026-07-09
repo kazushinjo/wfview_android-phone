@@ -1371,7 +1371,7 @@
           <enum>Qt::NoFocus</enum>
          </property>
          <property name="text">
-          <string>Exit</string>
+          <string>終了</string>
          </property>
         </widget>
        </item>

@@ -277,6 +277,8 @@ struct preferences {
     int mainWfTheme;
     int subWfTheme;
     int mainPlotFloor;
+    int mainWfFloor; // waterfall color floor, independent of spectrum plotFloor
+    int subWfFloor;
     int subPlotFloor;
     int mainPlotCeiling;
     int subPlotCeiling;

@@ -248,6 +248,7 @@ void audioHandlerBase::stateChanged(QAudio::State state)
     switch (state) {
     case QAudio::IdleState:
         isUnderrun.store(true, std::memory_order_relaxed);
+        qInfo(logAudio()) << "audio device underrun (IdleState)";
         if (underTimer->isActive()) underTimer->stop();
         break;
     case QAudio::ActiveState:

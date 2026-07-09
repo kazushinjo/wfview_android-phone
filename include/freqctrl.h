@@ -65,6 +65,7 @@ public:
 
 signals:
     void    newFrequency(qint64 freq); // emitted when frequency has changed
+    void    stepSizeSelected(qint64 stepHz); // Android: a digit was tapped to choose the tuning step
 
 public slots:
     void    setFrequency(qint64 freq);

@@ -44,6 +44,7 @@ public:
     void changeWfLength(uint wf);
     bool updateScope(scopeData spectrum);
     void setRange(int floor, int ceiling);
+    void setWfRange(int floor, int ceiling);
     void wfInterpolate(bool en) { colorMap->setInterpolate(en); }
     void wfAntiAliased(bool en) { colorMap->setAntialiased(en); }
     void wfTheme(int num);
@@ -102,7 +103,12 @@ public:
     void setTracking(bool en) { tracking=en; }
     void setRef(int ref);
     void setRefLimits(int lower, int upper);
-    void setFreqLock( bool en) { freqLock = en; }
+    void setFreqLock( bool en) {
+        freqLock = en;
+        // Grey out the step buttons while the frequency is locked.
+        if (freqStepDownButton != Q_NULLPTR) freqStepDownButton->setEnabled(!en);
+        if (freqStepUpButton != Q_NULLPTR) freqStepUpButton->setEnabled(!en);
+    }
     void setRoofing(uchar val);
     void setFilterShape(uchar val);
     void setScopeEnabled(bool en) { this->configScopeEnabled->setEnabled(en);};

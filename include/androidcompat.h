@@ -36,8 +36,8 @@ inline void androidFixDialogFocus(QWidget *dialog)
 class AndroidFitToScreenView : public QGraphicsView
 {
 public:
-    AndroidFitToScreenView(QGraphicsScene *scene, QSize naturalSize)
-        : QGraphicsView(scene), naturalSize(naturalSize) {}
+    AndroidFitToScreenView(QGraphicsScene *scene, QSize naturalSize, bool uniformScale = false)
+        : QGraphicsView(scene), naturalSize(naturalSize), uniform(uniformScale) {}
 
 protected:
     void resizeEvent(QResizeEvent *event) override
@@ -62,21 +62,30 @@ public:
     {
         QSizeF s = naturalSize;
         if (scene() != Q_NULLPTR) {
+            // Use the real bounding rect; anchoring at (0,0) would clip the
+            // left/top edge when a widget pokes left of the origin.
             const QRectF r = scene()->itemsBoundingRect();
             if (!r.isEmpty()) {
                 s = r.size();
-                setSceneRect(QRectF(QPointF(0, 0), s));
+                setSceneRect(r);
             }
         }
         if (s.width() > 0 && s.height() > 0) {
-            const qreal sx = qreal(viewport()->width()) / s.width();
-            const qreal sy = qreal(viewport()->height()) / s.height();
+            qreal sx = qreal(viewport()->width()) / s.width();
+            qreal sy = qreal(viewport()->height()) / s.height();
+            if (uniform) {
+                // Popups: keep the widget's own proportions and never blow
+                // small dialogs up into billboard text; letterbox instead.
+                const qreal u = qMin(qMin(sx, sy), (qreal)1.6);
+                sx = sy = u;
+            }
             setTransform(QTransform::fromScale(sx, sy));
         }
     }
 
 private:
     QSize naturalSize;
+    bool uniform {false};
 };
 
 // Wraps a plain top-level QWidget in an AndroidFitToScreenView the first
@@ -90,7 +99,7 @@ private:
 // on top of the scaled proxy (confirmed with wfmain's QMainWindow, which is
 // why wfmain uses takeCentralWidget() in main.cpp instead of wrapping
 // itself -- its central widget was never shown/top-level on its own).
-inline QWidget *androidFitToScreen(QWidget *w)
+inline QWidget *androidFitToScreen(QWidget *w, bool uniformScale = false)
 {
     static QHash<QWidget*, QWidget*> wrapped;
     auto it = wrapped.constFind(w);
@@ -104,12 +113,13 @@ inline QWidget *androidFitToScreen(QWidget *w)
     QGraphicsScene *scene = new QGraphicsScene();
     QGraphicsProxyWidget *proxy = scene->addWidget(w);
 
-    AndroidFitToScreenView *view = new AndroidFitToScreenView(scene, naturalSize);
+    AndroidFitToScreenView *view = new AndroidFitToScreenView(scene, naturalSize, uniformScale);
     // Track later growth of the embedded widget so nothing gets scaled
     // off-screen.
     QObject::connect(proxy, &QGraphicsWidget::geometryChanged, view,
                      [view]() { view->refit(); });
     view->setFrameShape(QFrame::NoFrame);
+    view->setBackgroundBrush(QColor(25, 27, 30));
     view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     view->setSceneRect(0, 0, naturalSize.width(), naturalSize.height());
