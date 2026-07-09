@@ -11,6 +11,29 @@
 #include <QScreen>
 #include <QApplication>
 #include <QGraphicsView>
+#include <QJniObject>
+#include <QCoreApplication>
+
+// Drive the Android media (STREAM_MUSIC) volume so the AF slider controls
+// the tablet's actual output level, not just wfview's internal gain.
+static void setAndroidSystemVolume(float fraction)
+{
+    QJniObject context = QNativeInterface::QAndroidApplication::context();
+    if (!context.isValid())
+        return;
+    QJniObject serviceName = QJniObject::fromString(QStringLiteral("audio"));
+    QJniObject audioManager = context.callObjectMethod(
+        "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;",
+        serviceName.object<jstring>());
+    if (!audioManager.isValid())
+        return;
+    const jint STREAM_MUSIC = 3;
+    const jint maxVol = audioManager.callMethod<jint>("getStreamMaxVolume", "(I)I", STREAM_MUSIC);
+    if (maxVol <= 0)
+        return;
+    const jint vol = qBound(0, qRound(fraction * maxVol), (int)maxVol);
+    audioManager.callMethod<void>("setStreamVolume", "(III)V", STREAM_MUSIC, vol, 0);
+}
 #endif
 #include "icomserver.h"
 #include "ui_wfmain.h"
@@ -55,6 +78,82 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     ui->monitorLabel->setText("Mon");
 
 #ifdef Q_OS_ANDROID
+    // Touch-first tuning controls, same presentation as the iPad port:
+    // a large pale-orange frequency dial with Fine / Lock buttons and the
+    // RIT controls grouped beneath it. The tuning step is chosen by tapping
+    // a frequency digit, so the desktop step combo is hidden.
+    ui->tuningStepCombo->hide();
+    ui->freqDial->setFixedSize(140, 140);
+    ui->freqDial->setStyleSheet(
+        QStringLiteral("QDial { background-color: #f6d6a8; border-radius: 70px; }"));
+    QLabel *frequencyDialLabel = new QLabel(QStringLiteral("周波数ダイアル"), ui->mainGroup);
+    frequencyDialLabel->setObjectName(QStringLiteral("frequencyDialLabel"));
+    frequencyDialLabel->setAlignment(Qt::AlignCenter);
+    ui->tuningLayout->insertWidget(0, frequencyDialLabel);
+    ui->tuningLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
+    ui->tuningLayout->setAlignment(ui->freqDial, Qt::AlignCenter);
+
+    QHBoxLayout *fineLockLayout = new QHBoxLayout;
+    fineLockLayout->setContentsMargins(0, 0, 0, 0);
+    fineLockLayout->setSpacing(8);
+
+    ui->horizontalLayout_25->removeWidget(ui->ritTuneDial);
+    ui->horizontalLayout_25->removeWidget(ui->ritEnableChk);
+
+    QHBoxLayout *ritInlineLayout = new QHBoxLayout;
+    ritInlineLayout->setContentsMargins(0, 0, 0, 0);
+    ritInlineLayout->setSpacing(4);
+
+    QPushButton *fineButton = new QPushButton(QStringLiteral("Fine"), ui->mainGroup);
+    fineButton->setObjectName(QStringLiteral("fineTuningButton"));
+    fineButton->setCheckable(true);
+    fineButton->setFixedWidth(80);
+    // NoFocus like the .ui operating buttons: a tapped button would otherwise
+    // keep focus and stay painted with qdarkstyle's blue :focus colour.
+    fineButton->setFocusPolicy(Qt::NoFocus);
+    fineButton->setToolTip(QStringLiteral("周波数ダイアルを1 Hzステップに切り替えます"));
+    fineButton->setStyleSheet(QStringLiteral(
+        "QPushButton { border-radius: 8px; }"
+        "QPushButton:checked { background-color: #f6d6a8; color: #202124; }"));
+    fineLockLayout->addWidget(fineButton);
+
+    androidLockButton = new QPushButton(QStringLiteral("Lock"), ui->mainGroup);
+    androidLockButton->setObjectName(QStringLiteral("frequencyLockButton"));
+    androidLockButton->setCheckable(true);
+    androidLockButton->setFixedWidth(80);
+    androidLockButton->setFocusPolicy(Qt::NoFocus);
+    androidLockButton->setToolTip(QStringLiteral("周波数をロックします"));
+    androidLockButton->setStyleSheet(QStringLiteral(
+        "QPushButton { border-radius: 8px; }"
+        "QPushButton:checked { background-color: #f6d6a8; color: #202124; }"));
+    fineLockLayout->addWidget(androidLockButton);
+
+    ritInlineLayout->addWidget(ui->ritTuneDial);
+    ritInlineLayout->addWidget(ui->ritEnableChk);
+    fineLockLayout->addLayout(ritInlineLayout);
+
+    ui->tuningLayout->addLayout(fineLockLayout);
+    connect(fineButton, &QPushButton::toggled, this, [this](bool checked) {
+        androidFineTuning = checked;
+    });
+    connect(androidLockButton, &QPushButton::toggled, this, [this](bool checked) {
+        if (ui->tuneLockChk->isChecked() != checked)
+        {
+            ui->tuneLockChk->blockSignals(true);
+            ui->tuneLockChk->setChecked(checked);
+            ui->tuneLockChk->blockSignals(false);
+        }
+        on_tuneLockChk_clicked(checked);
+    });
+    connect(ui->tuneLockChk, &QCheckBox::toggled, this, [this](bool checked) {
+        if (androidLockButton == nullptr)
+            return;
+        androidLockButton->blockSignals(true);
+        androidLockButton->setChecked(checked);
+        androidLockButton->blockSignals(false);
+    });
+    androidLockButton->setChecked(ui->tuneLockChk->isChecked());
+
     // The modulation-level slider keeps a fixed label; the slider adjusts
     // whichever input (USB/LAN/Mic...) is currently active.
     ui->modSliderLbl->setText(QStringLiteral("MOD"));
@@ -4138,6 +4237,13 @@ void wfmain::setAppTheme(bool isCustom)
                 QTextStream ts(&f);
                 QString sheet = ts.readAll();
 #ifdef Q_OS_ANDROID
+                // Rounded corners for the main control buttons: power on/off,
+                // tuner, CW, repeater, split and memory.
+                sheet += QStringLiteral(
+                    "QPushButton#rigPowerOnBtn, QPushButton#rigPowerOffBtn,"
+                    "QPushButton#tuneNowBtn, QPushButton#cwButton,"
+                    "QPushButton#rptSetupBtn, QPushButton#splitBtn, QPushButton#memoriesBtn"
+                    " { border-radius: 10px; padding: 4px 10px; }");
                 // Transmit button: pale-green background at all times (crimson
                 // text is applied dynamically while transmitting).
                 sheet += QStringLiteral(
@@ -4524,7 +4630,17 @@ void wfmain::on_freqDial_valueChanged(int value)
     // With the number of steps and direction of steps established,
     // we can now adjust the frequency:
 
-    f.Hz = roundFrequencyWithStep(receivers[currentReceiver]->getFrequency().Hz, delta, tsKnobHz);
+#ifdef Q_OS_ANDROID
+    // Android: the tuning step is chosen by tapping a frequency digit
+    // (stepSize), not the desktop step combo. Fine mode temporarily forces
+    // 1 Hz without discarding the digit-selected step used when Fine is off.
+    unsigned int knobStep = androidFineTuning
+                                ? 1U
+                                : (unsigned int)receivers[currentReceiver]->getStepSize();
+#else
+    unsigned int knobStep = tsKnobHz;
+#endif
+    f.Hz = roundFrequencyWithStep(receivers[currentReceiver]->getFrequency().Hz, delta, knobStep);
     f.MHzDouble = f.Hz / (double)1E6;
     if (f.Hz > 0)
     {
@@ -4596,6 +4712,14 @@ void wfmain::on_afGainSlider_valueChanged(int value)
         prefs.rxSetup.localAFgain = (quint8)(value);
         prefs.localAFgain = (quint8)(value);
     }
+
+#ifdef Q_OS_ANDROID
+    // Mirror the AF gain onto the OS media volume. Normalize with the
+    // slider's actual maximum -- ranges differ by rig, and dividing by a
+    // fixed 255 would cap the volume below maximum on some models.
+    if (ui->afGainSlider->maximum() > 0)
+        setAndroidSystemVolume((float)value / (float)ui->afGainSlider->maximum());
+#endif
 
     queue->addUnique(priorityImmediate,queueItem(funcAfGain,QVariant::fromValue<ushort>(value),false,currentReceiver));
 }
@@ -7587,6 +7711,10 @@ void wfmain::enableControls(bool en)
     ui->freqDial->setEnabled(en);
     ui->tuningStepCombo->setEnabled(en);
     ui->tuneLockChk->setEnabled(en);
+#ifdef Q_OS_ANDROID
+    if (androidLockButton != nullptr)
+        androidLockButton->setEnabled(en);
+#endif
     ui->ritEnableChk->setEnabled(en);
     ui->ritTuneDial->setEnabled(en);
     ui->afGainSlider->setEnabled(en);

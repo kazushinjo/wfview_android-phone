@@ -49,6 +49,24 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
         selectedVFO = uchar(en);
     });
 
+    // Frequency step buttons: one step per press (digit-tap step size),
+    // auto-repeating while held.
+    freqStepDownButton = new QPushButton(QStringLiteral("▼"), this);
+    freqStepUpButton = new QPushButton(QStringLiteral("▲"), this);
+    for (QPushButton *b : { freqStepDownButton, freqStepUpButton })
+    {
+        b->setHidden(true);
+        b->setFixedWidth(44);
+        b->setFocusPolicy(Qt::StrongFocus);
+        b->setAutoRepeat(true);
+        b->setAutoRepeatDelay(300);
+        b->setAutoRepeatInterval(150);
+    }
+    freqStepDownButton->setToolTip(tr("周波数を1ステップ下げます（長押しで連続）"));
+    freqStepUpButton->setToolTip(tr("周波数を1ステップ上げます（長押しで連続）"));
+    connect(freqStepDownButton, &QPushButton::clicked, this, [=]() { stepFrequency(-1); });
+    connect(freqStepUpButton, &QPushButton::clicked, this, [=]() { stepFrequency(1); });
+
     vfoSwapButton=new QPushButton(tr("A<>B"),this);
     vfoSwapButton->setHidden(true);
     vfoSwapButton->setFocusPolicy(Qt::StrongFocus);
@@ -111,6 +129,10 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
             fr->setMinimumSize(280,30);
             fr->setMaximumSize(280,30);
             displayLayout->addWidget(fr);
+            freqStepDownButton->setHidden(false);
+            freqStepUpButton->setHidden(false);
+            displayLayout->addWidget(freqStepDownButton);
+            displayLayout->addWidget(freqStepUpButton);
             // Add the VFO buttons here.
             if (numVFO > 1) {
                 vfoSelectButton->setHidden(false);
@@ -1930,6 +1952,23 @@ void receiverWidget::scroll(QWheelEvent *we)
         //qInfo() << "Moving to freq:" << f.Hz << "step" << stepsHz;
     }
     scrollWheelOffsetAccumulated = 0;
+}
+
+void receiverWidget::stepFrequency(int clicks)
+{
+    // Same tuning path as the scroll wheel, one step per call.
+    if (freqLock || clicks == 0)
+        return;
+
+    vfoCommandType t = queue->getVfoCommand(vfoA, receiver, true);
+    freqt f;
+    f.Hz = roundFrequency(freq.Hz, clicks, stepSize);
+    f.MHzDouble = f.Hz / (double)1E6;
+
+    emit sendTrack(f.Hz - this->freq.Hz);
+    setFrequencyLocally(f);
+    queue->add(priorityImmediate, queueItem(t.freqFunc, QVariant::fromValue<freqt>(f), false, receiver));
+    tempLockAcceptFreqData();
 }
 
 void receiverWidget::receiveMode(modeInfo m, uchar vfo)

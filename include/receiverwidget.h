@@ -185,6 +185,7 @@ private:
     void showHideControls(uchar mode);
     void showBandIndicators(bool en);
     void vfoSwap();
+    void stepFrequency(int clicks);
 
     quint64 roundFrequency(quint64 frequency, unsigned int tsHz);
     quint64 roundFrequency(quint64 frequency, int steps, unsigned int tsHz);
@@ -201,6 +202,8 @@ private:
     QList <freqCtrl*> freqDisplay;
     QSpacerItem* displayLSpacer;
     QPushButton* vfoSelectButton;
+    QPushButton* freqStepDownButton = Q_NULLPTR;
+    QPushButton* freqStepUpButton = Q_NULLPTR;
     QSpacerItem* displayCSpacer;
     QPushButton* vfoSwapButton;
     QPushButton* vfoEqualsButton;

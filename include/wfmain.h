@@ -521,6 +521,8 @@ private:
     QString currentConnectionProfile;
 #ifdef Q_OS_ANDROID
     QWidget *androidHelpWindow = nullptr;
+    class QPushButton *androidLockButton = nullptr;
+    bool androidFineTuning = false; // Force the frequency dial to 1 Hz steps.
 #endif
 
     QCustomPlot *plot; // line plot
