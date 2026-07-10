@@ -24,6 +24,7 @@ inline void androidFixDialogFocus(QWidget *dialog)
 #include <QHash>
 #include <QApplication>
 #include <QPushButton>
+#include <QScroller>
 
 // wfview's various top-level windows (main screen, settings, band select,
 // frequency entry, etc.) are all sized in fixed desktop-era pixel amounts
@@ -38,8 +39,10 @@ inline void androidFixDialogFocus(QWidget *dialog)
 class AndroidFitToScreenView : public QGraphicsView
 {
 public:
-    AndroidFitToScreenView(QGraphicsScene *scene, QSize naturalSize, bool uniformScale = false)
-        : QGraphicsView(scene), naturalSize(naturalSize), uniform(uniformScale) {}
+    AndroidFitToScreenView(QGraphicsScene *scene, QSize naturalSize,
+                           bool uniformScale = false, bool scrollVertical = false)
+        : QGraphicsView(scene), naturalSize(naturalSize), uniform(uniformScale),
+          scrollY(scrollVertical) {}
 
 protected:
     void resizeEvent(QResizeEvent *event) override
@@ -78,7 +81,10 @@ public:
             if (uniform) {
                 // Popups: keep the widget's own proportions and never blow
                 // small dialogs up into billboard text; letterbox instead.
-                const qreal u = qMin(qMin(sx, sy), (qreal)1.3);
+                // A vertically scrolling popup ignores the height limit:
+                // it keeps the standard popup text size and pans instead.
+                const qreal u = scrollY ? qMin(sx, (qreal)1.3)
+                                        : qMin(qMin(sx, sy), (qreal)1.3);
                 sx = sy = u;
             }
             setTransform(QTransform::fromScale(sx, sy));
@@ -88,6 +94,7 @@ public:
 private:
     QSize naturalSize;
     bool uniform {false};
+    bool scrollY {false};
 };
 
 // Wraps a plain top-level QWidget in an AndroidFitToScreenView the first
@@ -118,7 +125,8 @@ inline void androidPresentMainView(QWidget *except)
     }
 }
 
-inline QWidget *androidFitToScreen(QWidget *w, bool uniformScale = false)
+inline QWidget *androidFitToScreen(QWidget *w, bool uniformScale = false,
+                                   bool scrollVertical = false)
 {
     static QHash<QWidget*, QWidget*> wrapped;
     auto it = wrapped.constFind(w);
@@ -132,7 +140,13 @@ inline QWidget *androidFitToScreen(QWidget *w, bool uniformScale = false)
     QGraphicsScene *scene = new QGraphicsScene();
     QGraphicsProxyWidget *proxy = scene->addWidget(w);
 
-    AndroidFitToScreenView *view = new AndroidFitToScreenView(scene, naturalSize, uniformScale);
+    AndroidFitToScreenView *view = new AndroidFitToScreenView(scene, naturalSize,
+                                                              uniformScale, scrollVertical);
+    if (scrollVertical) {
+        // Finger panning for content taller than the screen.
+        QScroller::grabGesture(view->viewport(), QScroller::TouchGesture);
+        view->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+    }
     // Track later growth of the embedded widget so nothing gets scaled
     // off-screen.
     QObject::connect(proxy, &QGraphicsWidget::geometryChanged, view,

@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QGraphicsView>
 #include <QJniObject>
+#include <QPermission>
 #include <QCoreApplication>
 
 // Drive the Android media (STREAM_MUSIC) volume so the AF slider controls
@@ -184,6 +185,24 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
         androidLockButton->blockSignals(false);
     });
     androidLockButton->setChecked(ui->tuneLockChk->isChecked());
+
+    // Ask for the microphone up front: without the runtime grant Android
+    // silently records nothing and transmit audio carries no modulation.
+    {
+        QMicrophonePermission micPermission;
+        const Qt::PermissionStatus micStatus = qApp->checkPermission(micPermission);
+        if (micStatus == Qt::PermissionStatus::Undetermined)
+        {
+            qApp->requestPermission(micPermission, this, [](const QPermission &p) {
+                qInfo(logAudio()) << "Microphone permission:"
+                                  << (p.status() == Qt::PermissionStatus::Granted ? "granted" : "denied");
+            });
+        }
+        else if (micStatus == Qt::PermissionStatus::Denied)
+        {
+            qWarning(logAudio()) << "Microphone permission denied; TX audio will be silent.";
+        }
+    }
 
     // The modulation-level slider keeps a fixed label; the slider adjusts
     // whichever input (USB/LAN/Mic...) is currently active.
@@ -5498,6 +5517,7 @@ void wfmain::showAndRaiseWidget(QWidget *w)
     // same uniform (aspect-keeping, capped) scaling as the other popups and
     // renders with the compact popup font.
     const bool fillScreen = (w == androidHelpWindow);
+    QWidget *embedSource = w; // remember which popup this is before embedding
     if (w == setupui) {
         // Give the settings page the screen's aspect ratio so the uniform
         // scale fills the full height instead of letterboxing; the extra
@@ -5548,7 +5568,9 @@ void wfmain::showAndRaiseWidget(QWidget *w)
         }
         w = embed;
     }
-    w = androidFitToScreen(w, !fillScreen);
+    // The TX processor's DSP chain is taller than the screen at the popup
+    // text size; it keeps that size and pans vertically instead.
+    w = androidFitToScreen(w, !fillScreen, embedSource == audioProcWin);
     // Always present the wrapper full screen: a plain show() lets Android
     // size the window arbitrarily and the scaled content gets cropped.
     w->showFullScreen();
@@ -6664,7 +6686,11 @@ void wfmain::on_memoriesBtn_clicked()
 
         // Are you sure?
         if (prefs.confirmMemories) {
+#ifdef Q_OS_ANDROID
+            showAndRaiseWidget(memWindow);
+#else
             memWindow->show();
+#endif
         } else {
             QCheckBox *cb = new QCheckBox(tr("Don't ask me again"));
             cb->setToolTip(tr("Don't ask me to confirm memories again"));
@@ -6698,7 +6724,11 @@ void wfmain::on_memoriesBtn_clicked()
             delete cb;
 
             if (msgbox.clickedButton() == yesButton) {
+#ifdef Q_OS_ANDROID
+                showAndRaiseWidget(memWindow);
+#else
                 memWindow->show();
+#endif
             }
         }
     } else {
@@ -6747,8 +6777,7 @@ void wfmain::on_TXaudioProcBtn_clicked()
         }
     }
 #ifdef Q_OS_ANDROID
-    // Portrait-shaped: the DSP chain is a tall single column.
-    audioProcWin->setMinimumSize(1000, 920);
+    audioProcWin->setMinimumSize(1000, 760);
     showAndRaiseWidget(audioProcWin);
 #else
     audioProcWin->show();
