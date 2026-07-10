@@ -21,7 +21,7 @@ contains(DEFINES,USB_CONTROLLER){
     lessThan(QT_MAJOR_VERSION, 6): QT += gamepad
 }
 
-TARGET = wfview
+TARGET = wfview4android
 TEMPLATE = app
 
 # VERSION can be overridden on the qmake command line, e.g.:
@@ -132,7 +132,7 @@ macx{
     QMAKE_BUNDLE_DATA += rigFiles
 }
 
-QMAKE_TARGET_BUNDLE_PREFIX = org.wfview
+QMAKE_TARGET_BUNDLE_PREFIX = org.wfview4android
 
 !win32:DEFINES += HOST=\\\"`hostname`\\\" UNAME=\\\"`whoami`\\\"
 !win32:DEFINES += GITSHORT="\\\"$(shell git -C \"$$PWD\" rev-parse --short HEAD)\\\""

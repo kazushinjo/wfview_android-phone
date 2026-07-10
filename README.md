@@ -1,10 +1,11 @@
-# wfview for Android
+# wfview4android
 
-Icom リグ用コントロールソフト **wfview** の Android タブレット移植版です（arm64-v8a、ネットワーク接続専用）。
+**wfview4android** は、Icom リグ用コントロールソフト **wfview** の Android 移植版（非公式フォーク）です（arm64-v8a、ネットワーク接続専用）。
 IC-7300（Raspberry Pi 等の wfserver 経由）や IC-9700/IC-705 などの LAN 対応リグへ Wi-Fi で接続し、
 スペクトラム／ウォーターフォール表示・同調・送受信・音声処理をタブレットから操作できます。
 
-本リポジトリは [wfview](https://wfview.org/)（GPLv3）のフォークです。作業ブランチは `android-port` です。
+本リポジトリは [wfview](https://wfview.org/)（GPLv3）の非公式フォークです。本家プロジェクトとは無関係の個人移植であり、
+不具合報告は本家ではなく本リポジトリへお願いします。
 
 ## 主な特徴（デスクトップ版からの変更点）
 

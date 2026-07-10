@@ -1,6 +1,6 @@
-# wfview for Android 操作説明書
+# wfview4android 操作説明書
 
-Android タブレット向けにタッチ操作へ最適化した **wfview**（ネットワーク接続専用）の操作説明書です。
+Android 向けにタッチ操作へ最適化した wfview の非公式移植版 **wfview4android**（ネットワーク接続専用）の操作説明書です。
 Icom LAN 対応リグ本体（IC-705 / IC-9700 / IC-7610 など）、または Raspberry Pi / PC 上で動作する **wfserver** に Wi-Fi 経由で接続し、リグを遠隔操作します。
 
 - **対象端末**: Android タブレット／スマートフォン（arm64-v8a）。画面サイズ・解像度・縦横比には**自動で追従**します（レスポンシブ表示）

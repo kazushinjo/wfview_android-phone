@@ -176,14 +176,14 @@ and the four dependency dirs above:
     adb install -r android-build/build/outputs/apk/debug/android-build-debug.apk
     adb shell input keyevent KEYCODE_WAKEUP
     adb shell wm dismiss-keyguard
-    adb shell am force-stop org.wfview.wfview
-    adb shell monkey -p org.wfview.wfview -c android.intent.category.LAUNCHER 1
+    adb shell am force-stop org.wfview4android
+    adb shell monkey -p org.wfview4android -c android.intent.category.LAUNCHER 1
 
 Screenshot / log retrieval (same idea as Windows section 6):
 
     adb exec-out screencap -p > screenshot.png
-    adb shell "run-as org.wfview.wfview find /data/data/org.wfview.wfview/cache -iname '*.log'"
-    adb shell "run-as org.wfview.wfview cat /data/data/org.wfview.wfview/cache/<latest>.log"
+    adb shell "run-as org.wfview4android find /data/data/org.wfview4android/cache -iname '*.log'"
+    adb shell "run-as org.wfview4android cat /data/data/org.wfview4android/cache/<latest>.log"
 
 
 6. Known open items carried over from the Windows session (2026-07-09)

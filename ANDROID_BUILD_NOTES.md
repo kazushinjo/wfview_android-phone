@@ -319,8 +319,8 @@ Install to device and launch:
     adb install -r android-build/build/outputs/apk/debug/android-build-debug.apk
     adb shell input keyevent KEYCODE_WAKEUP
     adb shell wm dismiss-keyguard
-    adb shell am force-stop org.wfview.wfview
-    adb shell monkey -p org.wfview.wfview -c android.intent.category.LAUNCHER 1
+    adb shell am force-stop org.wfview4android
+    adb shell monkey -p org.wfview4android -c android.intent.category.LAUNCHER 1
 
 Screenshot for verification:
 
@@ -330,8 +330,8 @@ App log files (very useful for root-causing runtime issues — much more
 detailed than logcat, which doesn't seem to carry the app's own qInfo/
 qWarning/qDebug output under an easily-filterable tag):
 
-    adb shell "run-as org.wfview.wfview find /data/data/org.wfview.wfview/cache -iname '*.log'"
-    adb shell "run-as org.wfview.wfview cat /data/data/org.wfview.wfview/cache/<latest>.log"
+    adb shell "run-as org.wfview4android find /data/data/org.wfview4android/cache -iname '*.log'"
+    adb shell "run-as org.wfview4android cat /data/data/org.wfview4android/cache/<latest>.log"
 
 Test device this session: tablet "I11_Power" (MediaTek), adb id
 9059F240801848, physical screen 1200x2000 (portrait-native; tested mostly

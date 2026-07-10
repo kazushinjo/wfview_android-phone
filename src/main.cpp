@@ -132,10 +132,10 @@ int main(int argc, char *argv[])
     qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");
 #endif
     QApplication a(argc, argv);
-    a.setOrganizationName("wfview");
+    a.setOrganizationName("wfview4android");
     a.setOrganizationDomain("wfview.org");
-    a.setApplicationName("wfview");
-    a.setDesktopFileName("wfview");
+    a.setApplicationName("wfview4android");
+    a.setDesktopFileName("wfview4android");
 #ifdef Q_OS_ANDROID
     // With high-DPI scaling disabled, widget fonts would render at the
     // same pixel size on every device; scale the application font by the

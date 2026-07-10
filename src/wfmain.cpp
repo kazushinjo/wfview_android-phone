@@ -69,14 +69,14 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     ui(new Ui::wfmain),
     logFilename(logFile)
 {
-    QGuiApplication::setApplicationDisplayName("wfview");
-    QGuiApplication::setApplicationName(QString("wfview"));
+    QGuiApplication::setApplicationDisplayName("wfview4android");
+    QGuiApplication::setApplicationName(QString("wfview4android"));
 
     setWindowIcon(QIcon( QString(":resources/wfview.png")));
     this->debugMode = debugMode;
     debugModeLogging = debugMode;
     ui->setupUi(this);
-    setWindowTitle(QString("wfview"));
+    setWindowTitle(QString("wfview4android"));
 
     ui->monitorLabel->setText("Mon");
 
@@ -5760,13 +5760,15 @@ void wfmain::showAndroidHelp()
             browser->setPlainText(QStringLiteral("操作説明書リソースが見つかりません。"));
         browser->zoomIn(1);
         // Finger flick scrolling. Text selection would fight the pan gesture,
-        // so leave only link taps enabled. TouchGesture, not
-        // LeftMouseButtonGesture: grabbing the mouse steals the click before
-        // QTextBrowser can fire anchorClicked, so the table-of-contents
-        // links never worked. With the touch gesture a drag still
-        // flick-scrolls and a tap goes through as a link click.
+        // so leave only link taps enabled. LeftMouseButtonGesture, not
+        // TouchGesture: embedded in the fit-to-screen proxy the viewport
+        // never receives raw touch events, only the mouse events the
+        // wrapping QGraphicsView synthesises, so a touch-gesture scroller
+        // never engages. Link taps don't depend on the (scroller-consumed)
+        // mouse release: they are resolved from the press position by the
+        // event filter below.
         browser->setTextInteractionFlags(Qt::LinksAccessibleByMouse);
-        QScroller::grabGesture(browser->viewport(), QScroller::TouchGesture);
+        QScroller::grabGesture(browser->viewport(), QScroller::LeftMouseButtonGesture);
         // Qt's markdown importer does not create anchors for headings, so the
         // table-of-contents links (#sec-N) are resolved by hand: jump to the
         // heading block whose text starts with "N. ".
