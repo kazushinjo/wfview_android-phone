@@ -1,5 +1,6 @@
 #include "bandbuttons.h"
 #include "ui_bandbuttons.h"
+#include "androidcompat.h"
 
 bandbuttons::bandbuttons(QWidget *parent) :
     QWidget(parent),
@@ -278,12 +279,25 @@ void bandbuttons::bandStackBtnClick(availableBands band)
                 }
                 requestedBand = band;
 #ifdef Q_OS_ANDROID
-                // Close the popup once a band is chosen; hide the wrapping
-                // fit-to-screen view, not just the inner widget.
-                if (window() != Q_NULLPTR)
-                    window()->hide();
-                else
-                    hide();
+                // Close the popup once a band is chosen. Inside the
+                // fit-to-screen wrapper window() returns this widget itself
+                // (a proxy-embedded widget has no QWidget ancestor), and
+                // hiding that leaves the wrapper showing an empty scene
+                // forever -- reach the wrapping view through the proxy
+                // instead. The main window must be re-presented BEFORE the
+                // popup hides or its Android surface stays stale.
+                {
+                    QWidget *popup = window();
+                    if (QGraphicsProxyWidget *proxy = graphicsProxyWidget()) {
+                        if (proxy->scene() != Q_NULLPTR
+                                && !proxy->scene()->views().isEmpty())
+                            popup = proxy->scene()->views().first();
+                    }
+                    if (popup != Q_NULLPTR && popup != this) {
+                        androidPresentMainView(popup);
+                        popup->hide();
+                    }
+                }
 #endif
                 break;
             }

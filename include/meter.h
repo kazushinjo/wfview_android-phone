@@ -29,6 +29,8 @@ signals:
 public slots:
     void paintEvent(QPaintEvent *);
 
+    void resizeEvent(QResizeEvent *) override;
+
     void updateDrawing(int num);
     void setLevels(double current, double peak, double average);
     void setLevels(double current, double peak); // calculate avg

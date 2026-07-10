@@ -282,7 +282,20 @@ void meter::paintEvent(QPaintEvent *)
     // The end effect, is that the drawing functions will all
     // scale to the window size.
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
+#ifdef Q_OS_ANDROID
+    // A fixed point size renders enormous glyphs at tablet logical DPI and
+    // overlaps the bar; size the scale text from the meter's real height
+    // instead (device-independent).
+    {
+        QFont mf(this->fontInfo().family());
+        // ~18% of the meter height matches the desktop look; taller glyphs
+        // collide horizontally on the 25-unit scale spacing.
+        mf.setPixelSize(qBound(9, this->height() * 18 / 100, 20));
+        painter.setFont(mf);
+    }
+#else
     painter.setFont(QFont(this->fontInfo().family(), fontSize));
+#endif
     widgetWindowHeight = this->height();
     painter.setWindow(QRect(0, 0, 255+mXstart+15, widgetWindowHeight));
     barHeight = widgetWindowHeight / 2;
@@ -353,7 +366,10 @@ void meter::regenerateScale(QPainter *screenPainterHints) {
 
     painter.setCompositionMode(QPainter::CompositionMode_Source); // Important for correct alpha blending
 
-    painter.setFont(QFont(this->fontInfo().family(), fontSize));
+    // The scale cache is drawn in the same (window-logical) coordinates the
+    // screen painter uses, so reuse its font as-is; on Android that font is
+    // sized from the widget height (see paintEvent) rather than fontSize.
+    painter.setFont(screenPainterHints->font());
     painter.fillRect(rect(), Qt::transparent); // Clear the image before redrawing
 
 #ifdef QT_DEBUG
@@ -763,6 +779,14 @@ void meter::updateDrawing(int num)
 {
     fontSize = num;
     length = num;
+}
+
+void meter::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    // The scale cache (and, on Android, the height-derived scale font) is
+    // sized for the previous geometry; force a redraw at the new size.
+    recentlyChangedParameters = true;
 }
 
 // The drawScale functions draw the numbers and number unerline for each type of meter

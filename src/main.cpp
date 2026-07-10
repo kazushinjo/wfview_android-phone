@@ -369,9 +369,18 @@ int main(int argc, char *argv[])
     w.ensurePolished();
     // A small margin keeps edge-hugging widgets (meter scale, bottom row)
     // from touching the physical screen edges.
-    if (w.centralWidget() != Q_NULLPTR && w.centralWidget()->layout() != Q_NULLPTR)
+    if (w.centralWidget() != Q_NULLPTR && w.centralWidget()->layout() != Q_NULLPTR) {
         w.centralWidget()->layout()->setContentsMargins(
             androidDp(12), androidDp(2), androidDp(12), androidDp(2));
+        // Move the status bar into the central layout: as the QMainWindow's
+        // own status bar its internal reformat() ignores the widget's
+        // contentsMargins, so the tuned left indent of the status readouts
+        // never applies. As a plain layout row (same as the pre-responsive
+        // container) the margins work.
+        QStatusBar *sb = w.statusBar();
+        sb->setParent(w.centralWidget());
+        w.centralWidget()->layout()->addWidget(sb);
+    }
     w.showFullScreen();
 #else
     w.show();

@@ -27,6 +27,7 @@ inline void androidFixDialogFocus(QWidget *dialog)
 #include <QPushButton>
 #include <QScroller>
 #include <QScreen>
+#include <QWindow>
 
 // Responsive scaling: every Android-specific fixed pixel amount in the code
 // is expressed in "design pixels" against the original 2400x1378 reference
@@ -150,6 +151,12 @@ inline void androidPresentMainView(QWidget *except)
             tlw->raise();
             tlw->activateWindow();
             tlw->update();
+            // For an already-visible window showFullScreen() is a no-op, so
+            // additionally schedule a real frame on the native surface --
+            // without this the main window can stay stale (grey/black)
+            // after another top-level window is dismissed on Android.
+            if (tlw->windowHandle() != Q_NULLPTR)
+                tlw->windowHandle()->requestUpdate();
         }
     }
 }
@@ -159,8 +166,13 @@ inline QWidget *androidFitToScreen(QWidget *w, bool uniformScale = false,
 {
     static QHash<QWidget*, QWidget*> wrapped;
     auto it = wrapped.constFind(w);
-    if (it != wrapped.constEnd())
+    if (it != wrapped.constEnd()) {
+        // Defensive: if a selection handler hid the embedded widget (e.g.
+        // trying to close its popup via window()->hide()), an already-
+        // wrapped popup would otherwise reopen as an empty scene.
+        w->show();
         return it.value();
+    }
 
     w->ensurePolished();
     w->adjustSize();

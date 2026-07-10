@@ -100,6 +100,11 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     ui->meterSPoWidget->setMaximumWidth(androidDp(420));
     ui->meter2Widget->setMaximumWidth(androidDp(420));
     ui->meter3Widget->setMaximumWidth(androidDp(420));
+    // Tall enough for the scale text row plus the bar; the .ui minimum (30)
+    // lets the native layout squash the meters until the text overlaps.
+    ui->meterSPoWidget->setMinimumHeight(androidDp(96));
+    ui->meter2Widget->setMinimumHeight(androidDp(96));
+    ui->meter3Widget->setMinimumHeight(androidDp(96));
     // A little air between the S meter and the TX level meter below it.
     ui->meterLayout->setSpacing(androidDp(16));
     // These groups depend on the connected radio's capabilities. Keeping the
@@ -1244,11 +1249,16 @@ void wfmain::setupMainUI()
     // permanent widgets would sit at the far right edge.
     ui->statusBar->setContentsMargins(androidDp(400), 0, 0, androidDp(8));
     ui->statusBar->setMinimumHeight(androidDp(48));
+    // Keep the row compact: as a plain central-layout row (see main.cpp)
+    // it would otherwise absorb leftover vertical space.
+    ui->statusBar->setMaximumHeight(androidDp(64));
     ui->statusBar->addWidget(rigStatus);
     ui->statusBar->addWidget(pttLed);
     ui->statusBar->addWidget(connectedLed);
     ui->statusBar->addWidget(rigName);
-    rigName->setAlignment(Qt::AlignLeft);
+    // AlignLeft alone drops the default vertical centering, floating the
+    // rig name above the rest of the row.
+    rigName->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 #else
     ui->statusBar->addPermanentWidget(rigStatus);
     ui->statusBar->addPermanentWidget(pttLed);
