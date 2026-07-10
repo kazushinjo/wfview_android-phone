@@ -5581,10 +5581,32 @@ void wfmain::showAndRaiseWidget(QWidget *w)
     // renders with the compact popup font.
     const bool fillScreen = (w == androidHelpWindow);
     QWidget *embedSource = w; // remember which popup this is before embedding
+    if (!fillScreen) {
+        // Desktop-era .ui files fix many widths in pixels; the larger
+        // Android default font gets elided inside them. A smaller base font
+        // fits the designed boxes, and the uniform up-scaling below brings
+        // the text back to a comfortable size. The settings page gets a
+        // slightly larger face: its width-limited scale absorbs part of
+        // the increase, so the net on-screen text still grows. This must
+        // be set before the aspect sizing below measures the layout.
+        QFont popupFont = w->font();
+        popupFont.setPointSizeF(w == setupui ? 13.0 : 10.0);
+        w->setFont(popupFont);
+    }
     if (w == setupui) {
         // Give the settings page the screen's aspect ratio so the uniform
         // scale fills the full height instead of letterboxing; the extra
-        // height spreads the rows out.
+        // height spreads the rows out. The minimum is recomputed from
+        // scratch each open: the current page drives the width now, and a
+        // stale (wider page's) height would pin the scale down.
+        w->setMinimumHeight(0);
+        if (QScreen *scr = QGuiApplication::primaryScreen()) {
+            // Target a 1.2x on-screen zoom: wide enough that the groups on
+            // the compact pages keep their natural widths (letting the page
+            // shrink-wrap squeezed the connection-profile column), while
+            // the text still ends up much larger than the shared popups'.
+            w->setMinimumWidth(qRound(scr->availableSize().width() / 1.2));
+        }
         w->ensurePolished();
         w->adjustSize();
         if (QScreen *scr = QGuiApplication::primaryScreen()) {
@@ -5598,15 +5620,6 @@ void wfmain::showAndRaiseWidget(QWidget *w)
     // embedded whole: like wfmain itself, the QMainWindow keeps its own
     // native surface and the proxy render never appears. Embed their
     // central widget instead (detached once, cached).
-    if (!fillScreen) {
-        // Desktop-era .ui files fix many widths in pixels; the larger
-        // Android default font gets elided inside them. A smaller base font
-        // fits the designed boxes, and the uniform up-scaling below brings
-        // the text back to a comfortable size.
-        QFont popupFont = w->font();
-        popupFont.setPointSizeF(10.0);
-        w->setFont(popupFont);
-    }
     if (QMainWindow *mw = qobject_cast<QMainWindow*>(w)) {
         QWidget *&embed = androidMainWindowEmbeds[mw];
         if (embed == Q_NULLPTR) {

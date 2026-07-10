@@ -67,6 +67,24 @@ settingswidget::settingswidget(QWidget *parent) :
         kid->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
     // Size the page list to its longest entry so names are not cut off.
     ui->settingsList->setMinimumWidth(ui->settingsList->sizeHintForColumn(0) + 48);
+    // The three-line information text is by far the widest single item on
+    // the page; unwrapped it inflates the natural width, and the whole page
+    // (all text with it) gets scaled down to fit the screen. Let it wrap.
+    ui->label_53->setWordWrap(true);
+    ui->label_53->setMaximumWidth(700);
+    // Guidance text, not a control: keep it a step smaller than the page
+    // font (set explicitly so the popup-wide setFont() does not override
+    // it) so the wrapped block fits the top row without clipping.
+    {
+        QFont infoFont = ui->label_53->font();
+        infoFont.setPointSizeF(11.0);
+        ui->label_53->setFont(infoFont);
+    }
+    // With the page shrink-wrapped to the current tab, the top row divides
+    // the width between these three groups; without hard minimums the
+    // profile and CI-V columns get squeezed until their text elides.
+    ui->groupConnection->setMinimumWidth(330);
+    ui->groupBox_8->setMinimumWidth(510);
     // Make the connection-profile pulldown comfortable to tap.
     if (connectionProfileCombo != Q_NULLPTR)
         connectionProfileCombo->setMinimumHeight(44);
@@ -83,6 +101,31 @@ settingswidget::settingswidget(QWidget *parent) :
     // Room for the wrapper's back button above, and lift the bottom row
     // (save / reset / connect) off the very edge of the screen.
     ui->verticalLayout->setContentsMargins(10, 64, 10, 28);
+
+    // The stacked widget's size hint is the maximum over ALL pages, so the
+    // compact pages inherit the widest page's dimensions (User Interface,
+    // ~2.5k px) and the fit-to-screen wrapper scales every page far down.
+    // Let only the CURRENT page contribute, so each page is shown as large
+    // as it can be.
+    {
+        const int cur = ui->settingsStack->currentIndex();
+        for (int i = 0; i < ui->settingsStack->count(); ++i) {
+            const QSizePolicy::Policy p =
+                (i == cur) ? QSizePolicy::Preferred : QSizePolicy::Ignored;
+            ui->settingsStack->widget(i)->setSizePolicy(p, p);
+        }
+        connect(ui->settingsStack, &QStackedWidget::currentChanged,
+                this, [this](int idx) {
+            for (int i = 0; i < ui->settingsStack->count(); ++i) {
+                const QSizePolicy::Policy p =
+                    (i == idx) ? QSizePolicy::Preferred : QSizePolicy::Ignored;
+                ui->settingsStack->widget(i)->setSizePolicy(p, p);
+            }
+            if (ui->settingsStack->widget(idx) != Q_NULLPTR)
+                ui->settingsStack->widget(idx)->adjustSize();
+            this->adjustSize(); // let the fit-to-screen wrapper re-scale
+        });
+    }
 #endif
 
 #ifdef QT_DEBUG
