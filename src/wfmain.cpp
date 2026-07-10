@@ -5794,22 +5794,9 @@ void wfmain::showAndroidHelp()
             }
             else
             {
-                // The widget is shown wrapped in the fit-to-screen view;
-                // hide that wrapper, not the inner widget. window() returns
-                // the inner widget itself inside the proxy (no QWidget
-                // ancestor), so reach the wrapper through the proxy -- and
-                // re-present the main window BEFORE hiding, or its Android
-                // surface stays stale (see androidcompat.h).
-                QWidget *helpWrapper = androidHelpWindow->window();
-                if (QGraphicsProxyWidget *proxy = androidHelpWindow->graphicsProxyWidget())
-                {
-                    if (proxy->scene() != Q_NULLPTR
-                            && !proxy->scene()->views().isEmpty())
-                        helpWrapper = proxy->scene()->views().first();
-                }
-                androidPresentMainView(helpWrapper);
-                if (helpWrapper != Q_NULLPTR && helpWrapper != androidHelpWindow)
-                    helpWrapper->hide();
+                // Close the wrapped help window and return to the main
+                // screen (see androidClosePopup for the window() trap).
+                androidClosePopup(androidHelpWindow);
             }
         });
     }
@@ -6463,6 +6450,11 @@ void wfmain::radioSelection(QList<radio_cap_packet> radios)
 
 void wfmain::on_radioStatusBtn_clicked()
 {
+#ifdef Q_OS_ANDROID
+    // Wrapped fit-to-screen popup with the shared "← 戻る" back button;
+    // the cancel button and radio selection also return to the main screen.
+    showAndRaiseWidget(selRad);
+#else
     if (selRad->isVisible())
     {
         selRad->hide();
@@ -6471,6 +6463,7 @@ void wfmain::on_radioStatusBtn_clicked()
     {
         selRad->show();
     }
+#endif
 }
 
 void wfmain::setAudioDevicesUI()
@@ -6537,15 +6530,10 @@ void wfmain::setDefaultColorPresets()
 
 void wfmain::on_showLogBtn_clicked()
 {
-    if(logWindow->isMinimized())
-    {
-        logWindow->raise();
-        logWindow->activateWindow();
-        return;
-    }
-    logWindow->show();
-    logWindow->raise();
-    logWindow->activateWindow();
+    // showAndRaiseWidget handles the desktop show/raise/minimized dance,
+    // and on Android wraps the window in the fit-to-screen view with the
+    // shared "← 戻る" back button.
+    showAndRaiseWidget(logWindow);
 }
 
 void wfmain::initLogging()

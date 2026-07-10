@@ -1,6 +1,7 @@
 #include "logcategories.h"
 #include "selectradio.h"
 #include "ui_selectradio.h"
+#include "androidcompat.h"
 
 
 selectRadio::selectRadio(QWidget* parent) :
@@ -97,13 +98,23 @@ void selectRadio::on_table_cellClicked(int row, int col) {
 #endif
         ui->table->selectRow(row);
         emit selectedRadio(row);
+#ifdef Q_OS_ANDROID
+        androidClosePopup(this);
+#else
         this->setVisible(false);
+#endif
     }
 }
 
 
 void selectRadio::on_cancelButton_clicked() {
+#ifdef Q_OS_ANDROID
+    // Return to the main screen; hiding just this widget would leave the
+    // fit-to-screen wrapper showing an empty scene.
+    androidClosePopup(this);
+#else
     this->setVisible(false);
+#endif
 }
 
 void selectRadio::audioOutputLevel(quint16 level) {

@@ -1024,7 +1024,7 @@ p, li { white-space: pre-wrap; }
     <message>
         <location filename="../src/frequencyinputwidget.ui" line="251"/>
         <source>Back</source>
-        <translation>戻る</translation>
+        <translation>Back</translation>
     </message>
     <message>
         <location filename="../src/frequencyinputwidget.ui" line="254"/>

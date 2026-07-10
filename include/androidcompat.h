@@ -161,6 +161,28 @@ inline void androidPresentMainView(QWidget *except)
     }
 }
 
+// Close a popup from code inside the popup itself. window() cannot be used
+// for this: a proxy-embedded widget has no QWidget ancestor, so window()
+// returns the widget itself and hiding that leaves the wrapper showing an
+// empty scene forever. Resolve the wrapping view through the proxy, and
+// re-present the main window BEFORE hiding so its Android surface does not
+// go stale (uniform grey/black).
+inline void androidClosePopup(QWidget *inner)
+{
+    if (inner == Q_NULLPTR)
+        return;
+    QWidget *popup = inner->window();
+    if (QGraphicsProxyWidget *proxy = inner->graphicsProxyWidget()) {
+        if (proxy->scene() != Q_NULLPTR && !proxy->scene()->views().isEmpty())
+            popup = proxy->scene()->views().first();
+    }
+    androidPresentMainView(popup);
+    if (popup != Q_NULLPTR && popup != inner)
+        popup->hide();
+    else
+        inner->hide();
+}
+
 inline QWidget *androidFitToScreen(QWidget *w, bool uniformScale = false,
                                    bool scrollVertical = false)
 {
