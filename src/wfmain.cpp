@@ -5494,6 +5494,19 @@ void wfmain::showAndRaiseWidget(QWidget *w)
     // same uniform (aspect-keeping, capped) scaling as the other popups and
     // renders with the compact popup font.
     const bool fillScreen = (w == androidHelpWindow);
+    if (w == setupui) {
+        // Give the settings page the screen's aspect ratio so the uniform
+        // scale fills the full height instead of letterboxing; the extra
+        // height spreads the rows out.
+        w->ensurePolished();
+        w->adjustSize();
+        if (QScreen *scr = QGuiApplication::primaryScreen()) {
+            const QSize as = scr->availableSize();
+            const int targetH = w->width() * as.height() / qMax(1, as.width());
+            if (w->height() < targetH)
+                w->setMinimumHeight(targetH);
+        }
+    }
     // QMainWindow-based popups (repeater/split, CW sender) cannot be
     // embedded whole: like wfmain itself, the QMainWindow keeps its own
     // native surface and the proxy render never appears. Embed their
