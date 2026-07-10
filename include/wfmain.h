@@ -345,6 +345,11 @@ private slots:
     void showAndroidHelp();
 #endif
     void handleConnectionProfileSelected(QString name);
+#ifdef Q_OS_ANDROID
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+private slots:
+#endif
     void handleConnectionProfileSaveRequested(QString name);
     void handleConnectionProfileDeleteRequested(QString name);
 
@@ -524,6 +529,9 @@ private:
     QHash<QString, qint64> androidTapArm;
     QHash<QWidget*, QWidget*> androidMainWindowEmbeds;
     QWidget *androidHelpWindow = nullptr;
+    class QTextBrowser *androidHelpBrowser = nullptr;
+    QPoint androidHelpPressPos;
+    void androidHelpOpenLink(class QTextBrowser *browser, const QUrl &url);
     class QPushButton *androidLockButton = nullptr;
     bool androidFineTuning = false; // Force the frequency dial to 1 Hz steps.
     class QSlider *androidWfLevelSlider = nullptr; // waterfall colour floor, in RF/AF slider group

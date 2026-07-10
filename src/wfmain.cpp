@@ -5541,6 +5541,67 @@ void wfmain::showAndRaiseWidget(QWidget *w)
 }
 
 #ifdef Q_OS_ANDROID
+void wfmain::androidHelpOpenLink(QTextBrowser *browser, const QUrl &url)
+{
+    const QString target = url.fragment();
+    if (target.startsWith(QLatin1String("sec-")))
+    {
+        const QString prefix = target.mid(4) + QLatin1String(". ");
+        for (QTextBlock block = browser->document()->begin();
+             block.isValid(); block = block.next())
+        {
+            if (block.blockFormat().headingLevel() > 0 &&
+                block.text().startsWith(prefix))
+            {
+                // Remember where the jump started (the table of contents)
+                // so the back button can return there first.
+                browser->setProperty("helpTocPos",
+                                     browser->verticalScrollBar()->value());
+                if (QPushButton *bb = browser->parentWidget()
+                        ->findChild<QPushButton*>("androidHelpBackBtn"))
+                    bb->setText(QStringLiteral("← 目次に戻る"));
+                const qreal top = browser->document()->documentLayout()
+                                      ->blockBoundingRect(block).top();
+                browser->verticalScrollBar()->setValue(qRound(top));
+                return;
+            }
+        }
+    }
+    else if (url.scheme().startsWith(QLatin1String("http")))
+    {
+        QDesktopServices::openUrl(url);
+    }
+}
+
+bool wfmain::eventFilter(QObject *obj, QEvent *event)
+{
+    // Tap detection for help links: the kinetic scroller consumes presses
+    // before QTextBrowser can emit anchorClicked, so resolve short taps
+    // (little movement between press and release) through anchorAt().
+    if (androidHelpBrowser != Q_NULLPTR && obj == androidHelpBrowser->viewport())
+    {
+        // The kinetic scroller swallows the release (and anchorClicked with
+        // it), so a link press is armed here and fires shortly afterwards
+        // unless the gesture turned into a scroll in the meantime.
+        if (event->type() == QEvent::MouseButtonPress)
+        {
+            const QPoint pos = static_cast<QMouseEvent*>(event)->pos();
+            androidHelpPressPos = pos;
+            const QString anchor = androidHelpBrowser->anchorAt(pos);
+            if (!anchor.isEmpty())
+            {
+                QTextBrowser *browser = androidHelpBrowser;
+                const int scrollAtPress = browser->verticalScrollBar()->value();
+                QTimer::singleShot(250, browser, [this, browser, anchor, scrollAtPress]() {
+                    if (browser->verticalScrollBar()->value() == scrollAtPress)
+                        androidHelpOpenLink(browser, QUrl(anchor));
+                });
+            }
+        }
+    }
+    return QMainWindow::eventFilter(obj, event);
+}
+
 void wfmain::showAndroidHelp()
 {
     if (androidHelpWindow == nullptr)
@@ -5571,45 +5632,24 @@ void wfmain::showAndroidHelp()
             browser->setPlainText(QStringLiteral("操作説明書リソースが見つかりません。"));
         browser->zoomIn(1);
         // Finger flick scrolling. Text selection would fight the pan gesture,
-        // so leave only link taps enabled; Android delivers touches as
-        // synthesized mouse events, which LeftMouseButtonGesture picks up.
+        // so leave only link taps enabled. TouchGesture, not
+        // LeftMouseButtonGesture: grabbing the mouse steals the click before
+        // QTextBrowser can fire anchorClicked, so the table-of-contents
+        // links never worked. With the touch gesture a drag still
+        // flick-scrolls and a tap goes through as a link click.
         browser->setTextInteractionFlags(Qt::LinksAccessibleByMouse);
-        QScroller::grabGesture(browser->viewport(), QScroller::LeftMouseButtonGesture);
+        QScroller::grabGesture(browser->viewport(), QScroller::TouchGesture);
         // Qt's markdown importer does not create anchors for headings, so the
         // table-of-contents links (#sec-N) are resolved by hand: jump to the
         // heading block whose text starts with "N. ".
         browser->setOpenLinks(false);
-        connect(browser, &QTextBrowser::anchorClicked, browser,
-                [browser](const QUrl &url) {
-            const QString target = url.fragment();
-            if (target.startsWith(QLatin1String("sec-")))
-            {
-                const QString prefix = target.mid(4) + QLatin1String(". ");
-                for (QTextBlock block = browser->document()->begin();
-                     block.isValid(); block = block.next())
-                {
-                    if (block.blockFormat().headingLevel() > 0 &&
-                        block.text().startsWith(prefix))
-                    {
-                        // Remember where the jump started (the table of
-                        // contents) so the back button can return there first.
-                        browser->setProperty("helpTocPos",
-                                             browser->verticalScrollBar()->value());
-                        if (QPushButton *bb = browser->parentWidget()
-                                ->findChild<QPushButton*>("androidHelpBackBtn"))
-                            bb->setText(QStringLiteral("← 目次に戻る"));
-                        const qreal top = browser->document()->documentLayout()
-                                              ->blockBoundingRect(block).top();
-                        browser->verticalScrollBar()->setValue(qRound(top));
-                        return;
-                    }
-                }
-            }
-            else if (url.scheme().startsWith(QLatin1String("http")))
-            {
-                QDesktopServices::openUrl(url);
-            }
-        });
+        connect(browser, &QTextBrowser::anchorClicked, this,
+                [this, browser](const QUrl &url) { androidHelpOpenLink(browser, url); });
+        // The scroller consumes the press before QTextBrowser can emit
+        // anchorClicked, so taps are detected with an event filter on the
+        // viewport (press/release close together => resolve via anchorAt).
+        androidHelpBrowser = browser;
+        browser->viewport()->installEventFilter(this);
         layout->addWidget(browser);
 
         // Two-stage back button: after a table-of-contents jump the first tap
