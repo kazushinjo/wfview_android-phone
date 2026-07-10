@@ -15,8 +15,8 @@ bandbuttons::bandbuttons(QWidget *parent) :
         // Size each button to its (translated) label; fixed widths clipped
         // Japanese labels like 1200MHz帯 to "200MHz帯".
         const int textWidth = btn->fontMetrics().horizontalAdvance(btn->text()) + 24;
-        btn->setMinimumSize(qMax(52, textWidth), 30);
-        btn->setMaximumSize(qMax(72, textWidth), 30);
+        btn->setMinimumSize(qMax(52, textWidth), 36);
+        btn->setMaximumSize(qMax(72, textWidth), 36);
     }
 
     ui->bandStkLastUsedBtn->setVisible(false);
