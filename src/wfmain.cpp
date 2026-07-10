@@ -3670,8 +3670,27 @@ void wfmain::extChangedUdpPref(prefUDPItem i)
     case u_txLatency:
         break;
     case u_audioInput:
+#ifdef Q_OS_ANDROID
+        // Persist the microphone selection right away: Android sessions
+        // rarely end through the desktop save path.
+        if (settings != Q_NULLPTR && !prefs.txSetup.name.isEmpty()) {
+            settings->beginGroup("LAN");
+            settings->setValue("AudioInput", prefs.txSetup.name);
+            settings->endGroup();
+            settings->sync();
+        }
+#endif
         break;
     case u_audioOutput:
+#ifdef Q_OS_ANDROID
+        // Same for the RX audio output device.
+        if (settings != Q_NULLPTR && !prefs.rxSetup.name.isEmpty()) {
+            settings->beginGroup("LAN");
+            settings->setValue("AudioOutput", prefs.rxSetup.name);
+            settings->endGroup();
+            settings->sync();
+        }
+#endif
         break;
     case u_connectionType:
         break;
@@ -7963,6 +7982,13 @@ void wfmain::receiveRigCaps(rigCapabilities* caps)
 
         if(prefs.enableLAN)
         {
+#ifdef Q_OS_ANDROID
+            // Start every session at 50% AF: the slider drives the tablet's
+            // media volume, and whatever was saved last time (possibly full
+            // blast or silent) is surprising on launch.
+            prefs.localAFgain = 128;
+            prefs.rxSetup.localAFgain = 128;
+#endif
             ui->afGainSlider->setValue(prefs.localAFgain);
             queue->receiveValue(funcAfGain,quint8(prefs.localAFgain),currentReceiver);
         } else {
