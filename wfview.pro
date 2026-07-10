@@ -578,5 +578,11 @@ android {
     INCLUDEPATH += ../qcustomplot
     SOURCES += ../qcustomplot/qcustomplot.cpp
     HEADERS += ../qcustomplot/qcustomplot.h
+
+    # Qt's native QComboBox popup never gets a rendering surface on this
+    # Android build; installAndroidComboBoxFix() replaces it with an
+    # embedded QListWidget (see include/androidcombobox.h for details).
+    SOURCES += src/androidcombobox.cpp
+    HEADERS += include/androidcombobox.h
 }
 

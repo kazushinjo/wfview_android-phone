@@ -1,6 +1,7 @@
 #include "wfmain.h"
 #include "androidcompat.h"
 #ifdef Q_OS_ANDROID
+#include "androidcombobox.h"
 #include <QTextBrowser>
 #include <QTextBlock>
 #include <QAbstractTextDocumentLayout>
@@ -121,6 +122,12 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     // Keep the preamp/attenuator group compact (wide enough for its title)
     // and give the control columns an even horizontal rhythm.
     ui->preampAttGroup->setMaximumWidth(androidDp(410));
+    // These live directly on the native main window, where Qt's own combo
+    // popup never appears on Android (see include/androidcombobox.h);
+    // combos inside proxy-wrapped popups are unaffected.
+    installAndroidComboBoxFix(ui->preampSelCombo);
+    installAndroidComboBoxFix(ui->attSelCombo);
+    installAndroidComboBoxFix(ui->antennaSelCombo);
     ui->horizontalLayout_2->setSpacing(androidDp(28));
     ui->freqDial->setFixedSize(androidDp(260), androidDp(260));
     // Radius must stay exactly half the dial's size for a circular look.
