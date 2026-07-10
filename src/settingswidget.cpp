@@ -57,6 +57,16 @@ settingswidget::settingswidget(QWidget *parent) :
             | Qt::ImhNoPredictiveText
             | Qt::ImhNoAutoUppercase);
     }
+
+    // The designer's fixed maximum widths clip the Android-sized text (the
+    // page list, group titles, checkbox labels). Lift the caps so layouts
+    // take their natural width; the fit-to-screen wrapper scales the whole
+    // page down accordingly.
+    const auto allKids = findChildren<QWidget *>();
+    for (QWidget *kid : allKids)
+        kid->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+    // Size the page list to its longest entry so names are not cut off.
+    ui->settingsList->setMinimumWidth(ui->settingsList->sizeHintForColumn(0) + 48);
 #endif
 
 #ifdef QT_DEBUG

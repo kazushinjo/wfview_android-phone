@@ -5482,7 +5482,11 @@ void wfmain::showAndRaiseWidget(QWidget *w)
     // shown/raised/activated below. The settings and help windows are
     // designed to fill the screen; every other popup keeps its own
     // proportions (uniform scale, letterboxed) so text stays compact.
-    const bool fillScreen = (w == setupui || w == androidHelpWindow);
+    // Only the help viewer stretches to fill the screen; the settings page
+    // grew wider than the screen with the Android font, so it now uses the
+    // same uniform (aspect-keeping, capped) scaling as the other popups and
+    // renders with the compact popup font.
+    const bool fillScreen = (w == androidHelpWindow);
     // QMainWindow-based popups (repeater/split, CW sender) cannot be
     // embedded whole: like wfmain itself, the QMainWindow keeps its own
     // native surface and the proxy render never appears. Embed their
