@@ -615,7 +615,7 @@ ONLY use Manual CI-V when Transceive mode is not supported</string>
                    <number>30</number>
                   </property>
                   <property name="maximum">
-                   <number>500</number>
+                   <number>1000</number>
                   </property>
                   <property name="orientation">
                    <enum>Qt::Horizontal</enum>
@@ -645,7 +645,7 @@ ONLY use Manual CI-V when Transceive mode is not supported</string>
                    <number>30</number>
                   </property>
                   <property name="maximum">
-                   <number>500</number>
+                   <number>1000</number>
                   </property>
                   <property name="orientation">
                    <enum>Qt::Horizontal</enum>
