@@ -5601,11 +5601,11 @@ void wfmain::showAndRaiseWidget(QWidget *w)
         // stale (wider page's) height would pin the scale down.
         w->setMinimumHeight(0);
         if (QScreen *scr = QGuiApplication::primaryScreen()) {
-            // Target a 1.2x on-screen zoom: wide enough that the groups on
-            // the compact pages keep their natural widths (letting the page
-            // shrink-wrap squeezed the connection-profile column), while
-            // the text still ends up much larger than the shared popups'.
-            w->setMinimumWidth(qRound(scr->availableSize().width() / 1.2));
+            // Target a 1.0x on-screen zoom (text renders at its true point
+            // size): the page is laid out at the full screen width, which
+            // also keeps the compact pages' groups at their natural widths
+            // (shrink-wrapping squeezed the connection-profile column).
+            w->setMinimumWidth(scr->availableSize().width());
         }
         w->ensurePolished();
         w->adjustSize();
