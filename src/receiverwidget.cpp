@@ -1,6 +1,7 @@
 #include "receiverwidget.h"
 #include "logcategories.h"
 #include "rigidentities.h"
+#include "androidcompat.h"
 
 receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *parent)
     : QGroupBox{parent}, receiver(receiver), numVFO(vfo)
@@ -56,7 +57,11 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
     for (QPushButton *b : { freqStepDownButton, freqStepUpButton })
     {
         b->setHidden(true);
+#ifdef Q_OS_ANDROID
+        b->setFixedWidth(androidDp(44));
+#else
         b->setFixedWidth(44);
+#endif
         b->setFocusPolicy(Qt::StrongFocus);
         b->setAutoRepeat(true);
         b->setAutoRepeatDelay(300);
@@ -127,11 +132,10 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
         if (i==0)
         {
 #ifdef Q_OS_ANDROID
-            // The whole layout is scaled down to the phone/tablet screen,
-            // so the desktop-sized frequency readout ends up tiny. Give it
-            // roughly the same share of the screen as the iPad port.
-            fr->setMinimumSize(640,64);
-            fr->setMaximumSize(640,64);
+            // Give the frequency readout roughly the same share of the
+            // screen as the iPad port, on any device resolution.
+            fr->setMinimumSize(androidDp(640), androidDp(64));
+            fr->setMaximumSize(androidDp(640), androidDp(64));
 #else
             fr->setMinimumSize(280,30);
             fr->setMaximumSize(280,30);
@@ -139,11 +143,16 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
             displayLayout->addWidget(fr);
             freqStepDownButton->setHidden(false);
             freqStepUpButton->setHidden(false);
-            displayLayout->addSpacing(12);
+#ifdef Q_OS_ANDROID
+            const int stepGap = androidDp(12);
+#else
+            const int stepGap = 12;
+#endif
+            displayLayout->addSpacing(stepGap);
             displayLayout->addWidget(freqStepDownButton);
-            displayLayout->addSpacing(12);
+            displayLayout->addSpacing(stepGap);
             displayLayout->addWidget(freqStepUpButton);
-            displayLayout->addSpacing(12); // breathing room before the VFO button
+            displayLayout->addSpacing(stepGap); // breathing room before the VFO button
             // Add the VFO buttons here.
             if (numVFO > 1) {
                 vfoSelectButton->setHidden(false);
@@ -183,8 +192,8 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
             displayLayout->addSpacerItem(displayRSpacer);
         } else {
 #ifdef Q_OS_ANDROID
-            fr->setMinimumSize(360,40);
-            fr->setMaximumSize(360,40);
+            fr->setMinimumSize(androidDp(360), androidDp(40));
+            fr->setMaximumSize(androidDp(360), androidDp(40));
 #else
             fr->setMinimumSize(180,20);
             fr->setMaximumSize(180,20);
@@ -414,7 +423,11 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
 
     QFont font = configGroup->font();
     configGroup->setStyleSheet(QString("QGroupBox{border:1px solid gray;} *{padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px; font-size: %0px;}").arg(font.pointSize()-1));
+#ifdef Q_OS_ANDROID
+    configGroup->setMaximumWidth(androidDp(240));
+#else
     configGroup->setMaximumWidth(240);
+#endif
     configRef = new QSlider(Qt::Orientation::Horizontal);
     configRef->setTickInterval(50);
     configRef->setSingleStep(20);

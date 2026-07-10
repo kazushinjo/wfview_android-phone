@@ -23,8 +23,36 @@ inline void androidFixDialogFocus(QWidget *dialog)
 #include <QTransform>
 #include <QHash>
 #include <QApplication>
+#include <QMainWindow>
 #include <QPushButton>
 #include <QScroller>
+#include <QScreen>
+
+// Responsive scaling: every Android-specific fixed pixel amount in the code
+// is expressed in "design pixels" against the original 2400x1378 reference
+// layout, and mapped to real device pixels at runtime. On the reference
+// tablet (2000x1200) this reproduces the tuned look exactly; on any other
+// resolution/aspect the same proportions are kept while Qt's layouts absorb
+// the remaining difference natively (no bitmap scaling of the main window).
+inline qreal androidUiScale()
+{
+    static qreal s = 0.0;
+    if (s <= 0.0) {
+        const QScreen *scr = QGuiApplication::primaryScreen();
+        if (scr == Q_NULLPTR)
+            return 1.0;
+        const QSizeF g = scr->geometry().size();
+        // The app is locked to landscape but the screen geometry can still
+        // report the natural (portrait) orientation at startup.
+        const qreal w = qMax(g.width(), g.height());
+        const qreal h = qMin(g.width(), g.height());
+        s = qMin(w / 2400.0, h / 1378.0);
+    }
+    return s;
+}
+
+inline int androidDp(int designPx) { return qRound(designPx * androidUiScale()); }
+inline qreal androidDpF(qreal designPx) { return designPx * androidUiScale(); }
 
 // wfview's various top-level windows (main screen, settings, band select,
 // frequency entry, etc.) are all sized in fixed desktop-era pixel amounts
@@ -116,7 +144,8 @@ inline void androidPresentMainView(QWidget *except)
     const auto topLevels = QApplication::topLevelWidgets();
     for (QWidget *tlw : topLevels) {
         if (tlw != except && tlw->isVisible()
-            && qobject_cast<QGraphicsView*>(tlw) != Q_NULLPTR) {
+            && (qobject_cast<QGraphicsView*>(tlw) != Q_NULLPTR
+                || qobject_cast<QMainWindow*>(tlw) != Q_NULLPTR)) {
             tlw->showFullScreen();
             tlw->raise();
             tlw->activateWindow();
@@ -162,8 +191,8 @@ inline QWidget *androidFitToScreen(QWidget *w, bool uniformScale = false,
         // wrapper itself (unscaled) at the top-left.
         QPushButton *back = new QPushButton(QStringLiteral("← 戻る"), view);
         back->setObjectName(QStringLiteral("wrapperBackButton"));
-        back->setFixedSize(130, 48);
-        back->move(12, 8);
+        back->setFixedSize(androidDp(156), androidDp(58));
+        back->move(androidDp(14), androidDp(10));
         back->raise();
         QObject::connect(back, &QPushButton::clicked, view, [view]() {
             androidPresentMainView(view);

@@ -86,7 +86,7 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     ui->tuningStepCombo->hide();
     // Cap the scope area (spectrum + waterfall) so the frequency readout and
     // the control rows below keep a usable share of the screen.
-    ui->scopeVFOGroup->setMaximumHeight(760);
+    ui->scopeVFOGroup->setMaximumHeight(androidDp(760));
     // Narrow the main control button column (transmit, tune, CW, repeater,
     // memory); full-width buttons crowd the middle of the screen.
     const QList<QPushButton*> controlColButtons = {
@@ -94,14 +94,14 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
         ui->rptSetupBtn, ui->memoriesBtn
     };
     for (QPushButton *cb : controlColButtons)
-        cb->setMaximumWidth(300);
+        cb->setMaximumWidth(androidDp(300));
     // Keep the S/SWR meters compact; unconstrained they stretch across the
     // freed-up width and dwarf the other controls.
-    ui->meterSPoWidget->setMaximumWidth(420);
-    ui->meter2Widget->setMaximumWidth(420);
-    ui->meter3Widget->setMaximumWidth(420);
+    ui->meterSPoWidget->setMaximumWidth(androidDp(420));
+    ui->meter2Widget->setMaximumWidth(androidDp(420));
+    ui->meter3Widget->setMaximumWidth(androidDp(420));
     // A little air between the S meter and the TX level meter below it.
-    ui->meterLayout->setSpacing(16);
+    ui->meterLayout->setSpacing(androidDp(16));
     // These groups depend on the connected radio's capabilities. Keeping the
     // Designer defaults visible before capability discovery gives the main
     // window a minimum width larger than the landscape viewport.
@@ -113,35 +113,37 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     ui->horizontalLayout_2->insertLayout(4, ui->tuningLayout);
     // Keep the preamp/attenuator group compact (wide enough for its title)
     // and give the control columns an even horizontal rhythm.
-    ui->preampAttGroup->setMaximumWidth(410);
-    ui->horizontalLayout_2->setSpacing(28);
-    ui->freqDial->setFixedSize(260, 260);
+    ui->preampAttGroup->setMaximumWidth(androidDp(410));
+    ui->horizontalLayout_2->setSpacing(androidDp(28));
+    ui->freqDial->setFixedSize(androidDp(260), androidDp(260));
+    // Radius must stay exactly half the dial's size for a circular look.
     ui->freqDial->setStyleSheet(
-        QStringLiteral("QDial { background-color: #f6d6a8; border-radius: 130px; }"));
+        QString("QDial { background-color: #f6d6a8; border-radius: %1px; }")
+            .arg(androidDp(260) / 2));
     QLabel *frequencyDialLabel = new QLabel(QStringLiteral("周波数ダイアル"), ui->mainGroup);
     frequencyDialLabel->setObjectName(QStringLiteral("frequencyDialLabel"));
     frequencyDialLabel->setAlignment(Qt::AlignCenter);
     ui->tuningLayout->insertWidget(0, frequencyDialLabel);
-    ui->tuningLayout->setContentsMargins(30, 0, 0, 6);
+    ui->tuningLayout->setContentsMargins(androidDp(30), 0, 0, androidDp(6));
     ui->tuningLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
     ui->tuningLayout->setAlignment(ui->freqDial, Qt::AlignCenter);
-    ui->tuningLayout->insertSpacing(2, 4);
+    ui->tuningLayout->insertSpacing(2, androidDp(4));
 
     QHBoxLayout *fineLockLayout = new QHBoxLayout;
     fineLockLayout->setContentsMargins(0, 0, 0, 0);
-    fineLockLayout->setSpacing(8);
+    fineLockLayout->setSpacing(androidDp(8));
 
     ui->horizontalLayout_25->removeWidget(ui->ritTuneDial);
     ui->horizontalLayout_25->removeWidget(ui->ritEnableChk);
 
     QHBoxLayout *ritInlineLayout = new QHBoxLayout;
     ritInlineLayout->setContentsMargins(0, 0, 0, 0);
-    ritInlineLayout->setSpacing(4);
+    ritInlineLayout->setSpacing(androidDp(4));
 
     QPushButton *fineButton = new QPushButton(QStringLiteral("Fine"), ui->mainGroup);
     fineButton->setObjectName(QStringLiteral("fineTuningButton"));
     fineButton->setCheckable(true);
-    fineButton->setFixedWidth(80);
+    fineButton->setFixedWidth(androidDp(80));
     // NoFocus like the .ui operating buttons: a tapped button would otherwise
     // keep focus and stay painted with qdarkstyle's blue :focus colour.
     fineButton->setFocusPolicy(Qt::NoFocus);
@@ -154,7 +156,7 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     androidLockButton = new QPushButton(QStringLiteral("Lock"), ui->mainGroup);
     androidLockButton->setObjectName(QStringLiteral("frequencyLockButton"));
     androidLockButton->setCheckable(true);
-    androidLockButton->setFixedWidth(80);
+    androidLockButton->setFixedWidth(androidDp(80));
     androidLockButton->setFocusPolicy(Qt::NoFocus);
     androidLockButton->setToolTip(QStringLiteral("周波数をロックします"));
     androidLockButton->setStyleSheet(QStringLiteral(
@@ -421,17 +423,17 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     // spectrum. Mirrors the RF/AF/SQL columns (slider on top, label below).
     {
         QFont mg = ui->mainGroup->font();
-        mg.setPointSizeF(16.0);
+        mg.setPointSizeF(androidDpF(16.0));
         mg.setBold(true);
         QVBoxLayout *wfCol = new QVBoxLayout();
-        wfCol->setSpacing(6); // same slider-to-label gap as the .ui columns
+        wfCol->setSpacing(androidDp(6)); // same slider-to-label gap as the .ui columns
         androidWfLevelSlider = new QSlider(Qt::Vertical);
         androidWfLevelSlider->setRange(0, 160);
         androidWfLevelSlider->setValue(prefs.mainWfFloor); // finalised after loadSettings()
         androidWfLevelSlider->setToolTip(QStringLiteral("ウォーターフォールの色レベル(floor)"));
         // Match the RF/AF/SQL sliders: Fixed policy, 120px minimum height.
         androidWfLevelSlider->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-        androidWfLevelSlider->setMinimumHeight(120);
+        androidWfLevelSlider->setMinimumHeight(androidDp(120));
         // Stretch the whole level-slider column set for easier finger control.
         const QList<QSlider*> levelSliders = {
             ui->rfGainSlider, ui->afGainSlider, ui->sqlSlider,
@@ -439,8 +441,8 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
         };
         for (QSlider *ls : levelSliders) {
             // Same fixed height as the WF slider so the whole row lines up.
-            ls->setMinimumHeight(120);
-            ls->setMaximumHeight(120);
+            ls->setMinimumHeight(androidDp(120));
+            ls->setMaximumHeight(androidDp(120));
             QSizePolicy sp = ls->sizePolicy();
             sp.setVerticalPolicy(QSizePolicy::Fixed);
             ls->setSizePolicy(sp);
@@ -465,8 +467,8 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
             ui->modSliderLbl, ui->txPowerLabel, ui->monitorLabel
         };
         for (QLabel *ll : levelLabels) {
-            ll->setMinimumHeight(34);
-            ll->setMaximumHeight(40);
+            ll->setMinimumHeight(androidDp(34));
+            ll->setMaximumHeight(androidDp(40));
             ll->setFont(mg);
             ll->setAlignment(Qt::AlignHCenter);
         }
@@ -474,8 +476,8 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
         androidWfLevelLabel->setAlignment(Qt::AlignHCenter);
         androidWfLevelLabel->setFont(mg);
         // Same label box as the other columns so the whole column lines up.
-        androidWfLevelLabel->setMinimumHeight(34);
-        androidWfLevelLabel->setMaximumHeight(40);
+        androidWfLevelLabel->setMinimumHeight(androidDp(34));
+        androidWfLevelLabel->setMaximumHeight(androidDp(40));
         wfCol->addWidget(androidWfLevelSlider, 0, Qt::AlignHCenter);
         wfCol->addWidget(androidWfLevelLabel, 0);
         ui->levelsHorizontalLayout->addLayout(wfCol);
@@ -1240,8 +1242,8 @@ void wfmain::setupMainUI()
 #ifdef Q_OS_ANDROID
     // Keep the status readouts on the left where they are easy to spot;
     // permanent widgets would sit at the far right edge.
-    ui->statusBar->setContentsMargins(400, 0, 0, 8);
-    ui->statusBar->setMinimumHeight(48);
+    ui->statusBar->setContentsMargins(androidDp(400), 0, 0, androidDp(8));
+    ui->statusBar->setMinimumHeight(androidDp(48));
     ui->statusBar->addWidget(rigStatus);
     ui->statusBar->addWidget(pttLed);
     ui->statusBar->addWidget(connectedLed);
@@ -1259,7 +1261,7 @@ void wfmain::setupMainUI()
     pttLed->setToolTip("Receiving");
     rigName->setText("NONE");
 #ifdef Q_OS_ANDROID
-    rigName->setFixedWidth(100); // wide enough for e.g. "IC-7300"
+    rigName->setFixedWidth(androidDp(100)); // wide enough for e.g. "IC-7300"
 #else
     rigName->setFixedWidth(60);
 #endif
@@ -4451,32 +4453,37 @@ void wfmain::setAppTheme(bool isCustom)
 #ifdef Q_OS_ANDROID
                 // Rounded corners for the main control buttons: power on/off,
                 // tuner, CW, repeater, split and memory.
-                sheet += QStringLiteral(
+                sheet += QString(
                     "QPushButton#rigPowerOnBtn, QPushButton#rigPowerOffBtn,"
                     "QPushButton#tuneNowBtn, QPushButton#cwButton,"
                     "QPushButton#rptSetupBtn, QPushButton#splitBtn, QPushButton#memoriesBtn"
-                    " { border-radius: 10px; padding: 4px 10px; }");
+                    " { border-radius: %1px; padding: %2px %3px; }")
+                    .arg(androidDp(10)).arg(androidDp(4)).arg(androidDp(10));
                 // Transmit button: pale-green background at all times (crimson
                 // text is applied dynamically while transmitting).
-                sheet += QStringLiteral(
+                sheet += QString(
                     "QPushButton#transmitBtn { background-color: #81c784; color: white;"
-                    " font-weight: bold; border-radius: 10px; padding: 4px 10px; }");
+                    " font-weight: bold; border-radius: %1px; padding: %2px %3px; }")
+                    .arg(androidDp(10)).arg(androidDp(4)).arg(androidDp(10));
                 // Wider slider track and handle for finger operation.
-                sheet += QStringLiteral(
-                    "QSlider::groove:vertical { width: 12px; border-radius: 6px; }"
-                    "QSlider::handle:vertical { height: 26px; margin: 0 -6px;"
-                    " border-radius: 9px; }");
+                sheet += QString(
+                    "QSlider::groove:vertical { width: %1px; border-radius: %2px; }"
+                    "QSlider::handle:vertical { height: %3px; margin: 0 -%4px;"
+                    " border-radius: %5px; }")
+                    .arg(androidDp(12)).arg(androidDp(6)).arg(androidDp(26))
+                    .arg(androidDp(6)).arg(androidDp(9));
                 // Group-box titles: qdarkstyle reserves only 20px above the
                 // frame and pushes the title down 10px, so the Android-sized
                 // font lands inside the frame on top of the content.
-                sheet += QStringLiteral(
-                    "QGroupBox { margin-top: 30px; }"
-                    "QGroupBox::title { padding-top: 0px; padding-left: 10px;"
-                    " padding-right: 10px; }");
+                sheet += QString(
+                    "QGroupBox { margin-top: %1px; }"
+                    "QGroupBox::title { padding-top: 0px; padding-left: %2px;"
+                    " padding-right: %2px; }")
+                    .arg(androidDp(30)).arg(androidDp(10));
                 // A wider drop-down arrow area makes combo boxes easier to
                 // open with a finger.
-                sheet += QStringLiteral(
-                    "QComboBox::drop-down { width: 36px; }");
+                sheet += QString("QComboBox::drop-down { width: %1px; }")
+                    .arg(androidDp(36));
 #endif
                 qApp->setStyleSheet(sheet);
             }

@@ -6,13 +6,9 @@
 #include <QStatusBar>
 #include <QTranslator>
 #ifdef Q_OS_ANDROID
-#include <QGraphicsScene>
-#include <QGraphicsView>
-#include <QGraphicsProxyWidget>
 #include <QScreen>
-#include <QResizeEvent>
-#include <QTransform>
 #include <QLayout>
+#include "androidcompat.h"
 #endif
 #endif
 
@@ -111,63 +107,6 @@ void initDaemon() {
 void messageHandler(QtMsgType type, const QMessageLogContext& context, const QString& msg);
 #endif
 
-#ifdef Q_OS_ANDROID
-// QScreen::availableGeometry(), queried once up front, was observed to
-// reflect the device's natural (portrait) orientation rather than its
-// current (rotated to landscape) one, producing a pillarboxed portrait-
-// shaped render inside the landscape screen. Recomputing the scale
-// transform from the QGraphicsView's own viewport size on every resize
-// (rather than from a screen-geometry query taken once at startup) always
-// matches what Android actually handed the window, in whatever orientation.
-class FitToScreenView : public QGraphicsView
-{
-public:
-    FitToScreenView(QGraphicsScene *scene, QSize naturalSize)
-        : QGraphicsView(scene), naturalSize(naturalSize) {}
-
-protected:
-    void resizeEvent(QResizeEvent *event) override
-    {
-        QGraphicsView::resizeEvent(event);
-        refit();
-    }
-
-    void showEvent(QShowEvent *event) override
-    {
-        QGraphicsView::showEvent(event);
-        refit();
-    }
-
-public:
-    // The embedded central widget can end up larger than the reference
-    // size captured at startup (the proxy enforces the layout's minimum
-    // size, which grows as controls are added or rig-dependent groups
-    // appear), which clipped the right edge. Re-read the live size from
-    // the scene on every fit.
-    void refit()
-    {
-        QSizeF s = naturalSize;
-        if (scene() != Q_NULLPTR) {
-            // Use the real bounding rect (its origin can be negative when a
-            // widget pokes left of the origin); anchoring at (0,0) would
-            // clip the left/top edge.
-            const QRectF r = scene()->itemsBoundingRect();
-            if (!r.isEmpty()) {
-                s = r.size();
-                setSceneRect(r);
-            }
-        }
-        if (s.width() > 0 && s.height() > 0) {
-            const qreal sx = qreal(viewport()->width()) / s.width();
-            const qreal sy = qreal(viewport()->height()) / s.height();
-            setTransform(QTransform::fromScale(sx, sy));
-        }
-    }
-
-private:
-    QSize naturalSize;
-};
-#endif
 
 int main(int argc, char *argv[])
 {
@@ -197,6 +136,20 @@ int main(int argc, char *argv[])
     a.setOrganizationDomain("wfview.org");
     a.setApplicationName("wfview");
     a.setDesktopFileName("wfview");
+#ifdef Q_OS_ANDROID
+    // With high-DPI scaling disabled, widget fonts would render at the
+    // same pixel size on every device; scale the application font by the
+    // same design-to-device factor as the widget dimensions so text keeps
+    // its proportion of the screen on any resolution.
+    {
+        QFont f = a.font();
+        if (f.pointSizeF() > 0)
+            f.setPointSizeF(f.pointSizeF() * androidUiScale());
+        else if (f.pixelSize() > 0)
+            f.setPixelSize(qMax(1, androidDp(f.pixelSize())));
+        a.setFont(f);
+    }
+#endif
 #endif
 
 #ifdef QT_DEBUG
@@ -407,78 +360,19 @@ int main(int argc, char *argv[])
     a.setWheelScrollLines(1); // one line per wheel click
     wfmain w(settingsFile, logFilename, debugMode);
 #ifdef Q_OS_ANDROID
-    // wfview's layout is sized in fixed desktop-era pixel amounts and does
-    // not stretch to fill an arbitrary phone/tablet screen: shown directly,
-    // it either overflows off the physical screen edges (wider axis) or
-    // leaves blank space (shorter axis), with no way to reach the
-    // off-screen part since nothing scrolls. Rather than rework every
-    // layout to be screen-size-aware, host wfmain's central widget inside
-    // a QGraphicsView via QGraphicsProxyWidget and apply a transform that
-    // scales its natural (unscaled) size to exactly match the screen's
-    // available geometry -- this fills the screen exactly with no
-    // scrollbars and no cut-off edges.
-    //
-    // wfmain itself (the QMainWindow) is deliberately never shown: embedding
-    // it directly (as a top-level widget) left Android's platform plugin
-    // still compositing wfmain's own native surface on top of the scaled
-    // proxy, producing a doubled/ghosted display. wfmain has no menu bar,
-    // toolbar, status bar or dock widgets (confirmed against wfmain.ui), so
-    // its central widget alone is the entire UI; detaching it via
-    // takeCentralWidget() and embedding *that* (an ordinary child widget,
-    // never itself top-level) avoids the duplicate-surface problem.
-    // Pre-size the window to a generous reference size before detaching its
-    // central widget, so Expanding-policy children (like the waterfall/
-    // scope plots) claim their intended share of space the same way they
-    // would if a desktop user resized/maximized the window. Measuring
-    // sizeHint()/adjustSize() on an unshown window instead reports every
-    // panel at its bare minimum, which left the waterfall reduced to a
-    // sliver once that cramped layout was scaled up to fill the screen.
+    // Responsive main window: shown natively fullscreen, its layouts
+    // stretch to whatever screen Android provides. All Android-specific
+    // fixed pixel amounts are design pixels mapped through androidDp()
+    // (see androidcompat.h), so proportions match the reference layout on
+    // any resolution/aspect while Expanding panels (scope/waterfall)
+    // absorb the remaining space.
     w.ensurePolished();
-    // Match the 5:3 aspect of the target screen (2000x1200): with the status
-    // bar (~48) and margins (~14) the container totals ~2400x1440, so the
-    // fit-to-screen transform scales both axes equally and circles (the
-    // tuning dial) stay circular.
-    w.resize(2400, 1378);
-    if (w.layout())
-        w.layout()->activate();
-    const QSize naturalSize = w.size();
-    QWidget *central = w.takeCentralWidget();
-
-    // The status bar (rx latency, connection messages) belongs to the
-    // QMainWindow, not the central widget, so it would never be shown on
-    // Android. Stack the two in a plain container and embed that instead.
-    QWidget *container = new QWidget();
-    QVBoxLayout *containerLayout = new QVBoxLayout(container);
     // A small margin keeps edge-hugging widgets (meter scale, bottom row)
-    // from being clipped by the exact-fit scaling.
-    containerLayout->setContentsMargins(10, 2, 10, 12);
-    containerLayout->setSpacing(0);
-    containerLayout->addWidget(central, 1);
-    QStatusBar *mainStatusBar = w.statusBar();
-    mainStatusBar->setParent(container);
-    containerLayout->addWidget(mainStatusBar, 0);
-    // Re-apply the generous reference size to the container: embedding sizes
-    // the proxy from the layout minimum otherwise, collapsing the Expanding
-    // scope panel to a sliver (see the pre-size comment above).
-    container->setMinimumSize(naturalSize.width(),
-                              naturalSize.height() + mainStatusBar->sizeHint().height());
-    container->resize(container->minimumSize());
-    containerLayout->activate();
-
-    QGraphicsScene *scene = new QGraphicsScene();
-    QGraphicsProxyWidget *proxy = scene->addWidget(container);
-
-    FitToScreenView *view = new FitToScreenView(scene, naturalSize);
-    // Track later growth of the embedded widget (rig-dependent groups
-    // appearing after connect, etc.) so nothing gets scaled off-screen.
-    QObject::connect(proxy, &QGraphicsWidget::geometryChanged, view,
-                     [view]() { view->refit(); });
-    view->setFrameShape(QFrame::NoFrame);
-    view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    view->setSceneRect(0, 0, naturalSize.width(), naturalSize.height());
-
-    view->showFullScreen();
+    // from touching the physical screen edges.
+    if (w.centralWidget() != Q_NULLPTR && w.centralWidget()->layout() != Q_NULLPTR)
+        w.centralWidget()->layout()->setContentsMargins(
+            androidDp(12), androidDp(2), androidDp(12), androidDp(2));
+    w.showFullScreen();
 #else
     w.show();
 #endif
