@@ -22,6 +22,8 @@ inline void androidFixDialogFocus(QWidget *dialog)
 #include <QShowEvent>
 #include <QTransform>
 #include <QHash>
+#include <QApplication>
+#include <QPushButton>
 
 // wfview's various top-level windows (main screen, settings, band select,
 // frequency entry, etc.) are all sized in fixed desktop-era pixel amounts
@@ -76,7 +78,7 @@ public:
             if (uniform) {
                 // Popups: keep the widget's own proportions and never blow
                 // small dialogs up into billboard text; letterbox instead.
-                const qreal u = qMin(qMin(sx, sy), (qreal)1.6);
+                const qreal u = qMin(qMin(sx, sy), (qreal)1.3);
                 sx = sy = u;
             }
             setTransform(QTransform::fromScale(sx, sy));
@@ -99,6 +101,23 @@ private:
 // on top of the scaled proxy (confirmed with wfmain's QMainWindow, which is
 // why wfmain uses takeCentralWidget() in main.cpp instead of wrapping
 // itself -- its central widget was never shown/top-level on its own).
+// Bring the main fullscreen view back to the front. Android can leave its
+// surface stale (uniform grey) after another top-level window is dismissed,
+// so it is re-presented explicitly BEFORE the popup is hidden.
+inline void androidPresentMainView(QWidget *except)
+{
+    const auto topLevels = QApplication::topLevelWidgets();
+    for (QWidget *tlw : topLevels) {
+        if (tlw != except && tlw->isVisible()
+            && qobject_cast<QGraphicsView*>(tlw) != Q_NULLPTR) {
+            tlw->showFullScreen();
+            tlw->raise();
+            tlw->activateWindow();
+            tlw->update();
+        }
+    }
+}
+
 inline QWidget *androidFitToScreen(QWidget *w, bool uniformScale = false)
 {
     static QHash<QWidget*, QWidget*> wrapped;
@@ -123,6 +142,20 @@ inline QWidget *androidFitToScreen(QWidget *w, bool uniformScale = false)
     view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     view->setSceneRect(0, 0, naturalSize.width(), naturalSize.height());
+
+    if (uniformScale) {
+        // Every popup gets the same modest back button, drawn on the
+        // wrapper itself (unscaled) at the top-left.
+        QPushButton *back = new QPushButton(QStringLiteral("← 戻る"), view);
+        back->setObjectName(QStringLiteral("wrapperBackButton"));
+        back->setFixedSize(130, 48);
+        back->move(12, 8);
+        back->raise();
+        QObject::connect(back, &QPushButton::clicked, view, [view]() {
+            androidPresentMainView(view);
+            view->hide();
+        });
+    }
 
     wrapped.insert(w, view);
     return view;

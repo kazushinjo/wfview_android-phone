@@ -4429,6 +4429,10 @@ void wfmain::setAppTheme(bool isCustom)
                     "QGroupBox { margin-top: 30px; }"
                     "QGroupBox::title { padding-top: 0px; padding-left: 10px;"
                     " padding-right: 10px; }");
+                // A wider drop-down arrow area makes combo boxes easier to
+                // open with a finger.
+                sheet += QStringLiteral(
+                    "QComboBox::drop-down { width: 36px; }");
 #endif
                 qApp->setStyleSheet(sheet);
             }
@@ -6743,7 +6747,8 @@ void wfmain::on_TXaudioProcBtn_clicked()
         }
     }
 #ifdef Q_OS_ANDROID
-    audioProcWin->setMinimumSize(1000, 760);
+    // Portrait-shaped: the DSP chain is a tall single column.
+    audioProcWin->setMinimumSize(1000, 920);
     showAndRaiseWidget(audioProcWin);
 #else
     audioProcWin->show();
@@ -6841,7 +6846,8 @@ void wfmain::on_RXaudioProcBtn_clicked()
         }
     }
 #ifdef Q_OS_ANDROID
-    rxAudioProcWin->setMinimumSize(1000, 760);
+    // Portrait-shaped: the DSP chain is a tall single column.
+    rxAudioProcWin->setMinimumSize(1000, 920);
     showAndRaiseWidget(rxAudioProcWin);
 #else
     rxAudioProcWin->show();

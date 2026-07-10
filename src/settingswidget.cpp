@@ -67,6 +67,9 @@ settingswidget::settingswidget(QWidget *parent) :
         kid->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
     // Size the page list to its longest entry so names are not cut off.
     ui->settingsList->setMinimumWidth(ui->settingsList->sizeHintForColumn(0) + 48);
+    // Make the connection-profile pulldown comfortable to tap.
+    if (connectionProfileCombo != Q_NULLPTR)
+        connectionProfileCombo->setMinimumHeight(44);
 
     // Open up the rows vertically: the desktop spacing packs them so tight
     // on the tablet that the page is hard to scan.
@@ -76,6 +79,10 @@ settingswidget::settingswidget(QWidget *parent) :
     const auto vboxes = findChildren<QVBoxLayout *>();
     for (QVBoxLayout *vl : vboxes)
         vl->setSpacing(qMax(vl->spacing(), 12));
+
+    // Room for the wrapper's back button above, and lift the bottom row
+    // (save / reset / connect) off the very edge of the screen.
+    ui->verticalLayout->setContentsMargins(10, 64, 10, 28);
 #endif
 
 #ifdef QT_DEBUG
