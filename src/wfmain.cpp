@@ -4422,6 +4422,13 @@ void wfmain::setAppTheme(bool isCustom)
                     "QSlider::groove:vertical { width: 12px; border-radius: 6px; }"
                     "QSlider::handle:vertical { height: 26px; margin: 0 -6px;"
                     " border-radius: 9px; }");
+                // Group-box titles: qdarkstyle reserves only 20px above the
+                // frame and pushes the title down 10px, so the Android-sized
+                // font lands inside the frame on top of the content.
+                sheet += QStringLiteral(
+                    "QGroupBox { margin-top: 30px; }"
+                    "QGroupBox::title { padding-top: 0px; padding-left: 10px;"
+                    " padding-right: 10px; }");
 #endif
                 qApp->setStyleSheet(sheet);
             }

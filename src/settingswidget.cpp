@@ -67,6 +67,15 @@ settingswidget::settingswidget(QWidget *parent) :
         kid->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
     // Size the page list to its longest entry so names are not cut off.
     ui->settingsList->setMinimumWidth(ui->settingsList->sizeHintForColumn(0) + 48);
+
+    // Open up the rows vertically: the desktop spacing packs them so tight
+    // on the tablet that the page is hard to scan.
+    const auto grids = findChildren<QGridLayout *>();
+    for (QGridLayout *gl : grids)
+        gl->setVerticalSpacing(qMax(gl->verticalSpacing(), 18));
+    const auto vboxes = findChildren<QVBoxLayout *>();
+    for (QVBoxLayout *vl : vboxes)
+        vl->setSpacing(qMax(vl->spacing(), 12));
 #endif
 
 #ifdef QT_DEBUG
