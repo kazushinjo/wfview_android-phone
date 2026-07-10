@@ -60,6 +60,19 @@ void audioHandlerQtInput::onReadyRead()
         memcpy(&pkt.guid, setupData.guid, GUIDLEN);
         pkt.data   = tempBuf.data.left(bytesPerBlock);
         tempBuf.data.remove(0, bytesPerBlock);
+#ifdef Q_OS_ANDROID
+        // Android's raw MIC source is far quieter than desktop inputs
+        // (peaks around 0.06 full scale even for close speech), leaving the
+        // transmit modulation nearly inaudible. Boost with clipping guard.
+        {
+            qint16 *s = reinterpret_cast<qint16*>(pkt.data.data());
+            const int n = pkt.data.size() / (int)sizeof(qint16);
+            for (int i = 0; i < n; ++i) {
+                const int v = int(s[i]) * 6;
+                s[i] = qint16(qBound(-32768, v, 32767));
+            }
+        }
+#endif
         emit sendToConverter(pkt);
     }
 }
@@ -67,6 +80,19 @@ void audioHandlerQtInput::onReadyRead()
 void audioHandlerQtInput::onConverted(audioPacket audio)
 {
     if (audio.data.isEmpty()) return;
+
+#ifdef Q_OS_ANDROID
+    // Diagnostics: confirm mic capture is flowing towards the radio.
+    static QElapsedTimer txLogTimer;
+    static qint64 txBytes = 0;
+    txBytes += audio.data.size();
+    if (!txLogTimer.isValid()) txLogTimer.start();
+    if (txLogTimer.elapsed() > 1000) {
+        qInfo(logAudio()) << "TX mic ->" << txBytes << "B/s peak:" << audio.amplitudePeak;
+        txBytes = 0;
+        txLogTimer.restart();
+    }
+#endif
 
     emit haveAudioData(audio);
 

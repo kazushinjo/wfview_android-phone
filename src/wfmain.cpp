@@ -100,6 +100,8 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     ui->meterSPoWidget->setMaximumWidth(420);
     ui->meter2Widget->setMaximumWidth(420);
     ui->meter3Widget->setMaximumWidth(420);
+    // A little air between the S meter and the TX level meter below it.
+    ui->meterLayout->setSpacing(16);
     // These groups depend on the connected radio's capabilities. Keeping the
     // Designer defaults visible before capability discovery gives the main
     // window a minimum width larger than the landscape viewport.
@@ -3230,6 +3232,10 @@ void wfmain::extChangedColPref(prefColItem i)
         ui->meterSPoWidget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
         ui->meter2Widget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
         ui->meter3Widget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
+#ifdef Q_OS_ANDROID
+        // TX level meter: red needle for visibility.
+        ui->meter2Widget->setColors(QColor(Qt::red), cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
+#endif
         break;
 
 #if defined __GNUC__
@@ -4614,6 +4620,14 @@ void wfmain::initPeriodicCommands()
     {
         prefs.meter1Type = meterS; // Just in case we have previously connected to a radio with meter type options.
     }
+#ifdef Q_OS_ANDROID
+    // Keep a TX modulation level meter under the S meter so the operator
+    // can see the microphone audio while transmitting.
+    if (prefs.meter2Type == meterNone)
+        prefs.meter2Type = meterTxMod;
+    else if (prefs.meter2Type != meterTxMod && prefs.meter3Type == meterNone)
+        prefs.meter3Type = meterTxMod;
+#endif
     changeMeterType(prefs.meter1Type, 1);
     changeMeterType(prefs.meter2Type, 2);
     changeMeterType(prefs.meter3Type, 3);
@@ -5429,6 +5443,14 @@ void wfmain::on_transmitBtn_clicked()
         showStatusBarText("Sending PTT ON command. Use Control-R to receive.");
         queue->add(priorityImmediate,queueItem(funcTransceiverStatus,QVariant::fromValue<bool>(true),false,uchar(0)));
 
+#ifdef Q_OS_ANDROID
+        // Optimistic UI: the polled PTT status takes a moment to come back,
+        // which made the button feel unresponsive. Show the new state right
+        // away; the real status corrects it if the rig did not follow.
+        ui->transmitBtn->setText("送信中");
+        ui->transmitBtn->setStyleSheet("color: crimson; font-weight: bold;");
+#endif
+
         // send PTT
         // Start 3 minute timer
         pttTimer->start();
@@ -5436,6 +5458,11 @@ void wfmain::on_transmitBtn_clicked()
     } else {
         // Currently transmitting
         queue->add(priorityImmediate,queueItem(funcTransceiverStatus,QVariant::fromValue<bool>(false),false,uchar(0)));
+
+#ifdef Q_OS_ANDROID
+        ui->transmitBtn->setText("送信");
+        ui->transmitBtn->setStyleSheet("");
+#endif
 
         pttTimer->stop();
     }
@@ -6427,6 +6454,10 @@ void wfmain::useColorPreset(colorPrefsType *cp)
     ui->meterSPoWidget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
     ui->meter2Widget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
     ui->meter3Widget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
+#ifdef Q_OS_ANDROID
+    // TX level meter: red needle for visibility.
+    ui->meter2Widget->setColors(QColor(Qt::red), cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
+#endif
 
     ui->scopeDualBtn->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border: 1px solid;}")
                                     .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
