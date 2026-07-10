@@ -4666,12 +4666,14 @@ void wfmain::initPeriodicCommands()
         prefs.meter1Type = meterS; // Just in case we have previously connected to a radio with meter type options.
     }
 #ifdef Q_OS_ANDROID
-    // Keep a TX modulation level meter under the S meter so the operator
-    // can see the microphone audio while transmitting.
-    if (prefs.meter2Type == meterNone)
-        prefs.meter2Type = meterTxMod;
-    else if (prefs.meter2Type != meterTxMod && prefs.meter3Type == meterNone)
-        prefs.meter3Type = meterTxMod;
+    // Fixed meter stack for the touch UI: S/Po on top, SWR in the middle
+    // (when the rig can report it), TX modulation level at the bottom so
+    // the operator can see the microphone audio while transmitting.
+    if (rigCaps->commands.contains(funcSWRMeter))
+        prefs.meter2Type = meterSWR;
+    else if (prefs.meter2Type == meterSWR)
+        prefs.meter2Type = meterNone;
+    prefs.meter3Type = meterTxMod;
 #endif
     changeMeterType(prefs.meter1Type, 1);
     changeMeterType(prefs.meter2Type, 2);
