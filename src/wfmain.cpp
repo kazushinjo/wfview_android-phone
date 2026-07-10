@@ -1280,7 +1280,10 @@ void wfmain::setupMainUI()
     pttLed->setToolTip("Receiving");
     rigName->setText("NONE");
 #ifdef Q_OS_ANDROID
-    rigName->setFixedWidth(androidDp(100)); // wide enough for e.g. "IC-7300"
+    // A fixed width clipped longer model names (e.g. "IC-7300" rendered as
+    // "IC-730"); use a minimum so short names stay aligned but longer ones
+    // can still grow to fit.
+    rigName->setMinimumWidth(androidDp(100));
 #else
     rigName->setFixedWidth(60);
 #endif
