@@ -46,8 +46,10 @@ struct networkAudioLevels {
     bool haveRxLevels = false;
     quint8 rxAudioRMS = 0;
     quint8 txAudioRMS = 0;
-    quint8 rxAudioPeak = 0;
-    quint8 txAudioPeak = 0;
+    // Peaks are allowed above 255 (the meter's normal 0dBFS ceiling) so
+    // clipping severity is visible instead of being truncated/wrapped away.
+    quint16 rxAudioPeak = 0;
+    quint16 txAudioPeak = 0;
 };
 
 struct networkStatus {

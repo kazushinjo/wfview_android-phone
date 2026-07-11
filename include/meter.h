@@ -91,6 +91,15 @@ private:
     std::vector<double_t> peakLevels;
 
     int peakRedLevel=0;
+
+    // Extra logical width reserved past the normal 255=0dBFS edge, used only
+    // by the log-taper audio meters (meterAudio/meterTxMod/meterRxAudio) to
+    // show clipping severity up to roughly +6dBFS instead of just pinning at
+    // max. Other meter types never draw into this space.
+    static constexpr int meterOverflowPx = 60;
+    bool isAudioFamilyMeter() const {
+        return meterType == meterAudio || meterType == meterTxMod || meterType == meterRxAudio;
+    }
     bool drawLabels = true;
     int labelWidth = 0;
     bool useGradients = true;
