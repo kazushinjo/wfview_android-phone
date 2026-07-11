@@ -17,26 +17,43 @@
 #include <QJniObject>
 #include <QPermission>
 #include <QCoreApplication>
+#include <QInputMethod>
 
-// Drive the Android media (STREAM_MUSIC) volume so the AF slider controls
-// the tablet's actual output level, not just wfview's internal gain.
-static void setAndroidSystemVolume(float fraction)
+// Qt's low-latency Android audio path does not automatically duck with the
+// OS media (STREAM_MUSIC) volume the way a normal MediaPlayer stream would,
+// so without this the hardware volume buttons have no effect at all. Poll
+// the stream's current index (there's no lightweight push notification for
+// it via the NDK) and, on change, apply it to wfview's own AF gain -- never
+// the other way around, so this app no longer reaches back and rewrites the
+// system volume itself.
+static int androidSystemVolumeIndex()
 {
     QJniObject context = QNativeInterface::QAndroidApplication::context();
     if (!context.isValid())
-        return;
+        return -1;
     QJniObject serviceName = QJniObject::fromString(QStringLiteral("audio"));
     QJniObject audioManager = context.callObjectMethod(
         "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;",
         serviceName.object<jstring>());
     if (!audioManager.isValid())
-        return;
+        return -1;
     const jint STREAM_MUSIC = 3;
-    const jint maxVol = audioManager.callMethod<jint>("getStreamMaxVolume", "(I)I", STREAM_MUSIC);
-    if (maxVol <= 0)
-        return;
-    const jint vol = qBound(0, qRound(fraction * maxVol), (int)maxVol);
-    audioManager.callMethod<void>("setStreamVolume", "(III)V", STREAM_MUSIC, vol, 0);
+    return audioManager.callMethod<jint>("getStreamVolume", "(I)I", STREAM_MUSIC);
+}
+
+static int androidSystemVolumeMaxIndex()
+{
+    QJniObject context = QNativeInterface::QAndroidApplication::context();
+    if (!context.isValid())
+        return -1;
+    QJniObject serviceName = QJniObject::fromString(QStringLiteral("audio"));
+    QJniObject audioManager = context.callObjectMethod(
+        "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;",
+        serviceName.object<jstring>());
+    if (!audioManager.isValid())
+        return -1;
+    const jint STREAM_MUSIC = 3;
+    return audioManager.callMethod<jint>("getStreamMaxVolume", "(I)I", STREAM_MUSIC);
 }
 #endif
 #include "icomserver.h"
@@ -1429,6 +1446,22 @@ void wfmain::setInitialTiming()
     connect(timeSync, SIGNAL(timeout()), this, SLOT(setRadioTimeDateSend()));
     waitingToSetTimeDate = false;
     lastFreqCmdTime_ms = QDateTime::currentMSecsSinceEpoch() - 5000; // 5 seconds ago
+
+#ifdef Q_OS_ANDROID
+    androidVolumeWatch = new QTimer(this);
+    androidVolumeWatch->setInterval(300);
+    connect(androidVolumeWatch, &QTimer::timeout, this, &wfmain::pollAndroidSystemVolume);
+    androidVolumeWatch->start();
+
+    // Settings is scaled to fit the whole page on screen with no scrolling;
+    // when the soft keyboard covers the bottom of it, re-fit against the
+    // remaining space above the keyboard instead (see setKeyboardInset())
+    // so the focused field never ends up hidden underneath it.
+    connect(QGuiApplication::inputMethod(), &QInputMethod::keyboardRectangleChanged,
+            this, &wfmain::adjustAndroidSettingsForKeyboard);
+    connect(qApp, &QApplication::focusChanged,
+            this, [this](QWidget*, QWidget*) { adjustAndroidSettingsForKeyboard(); });
+#endif
 }
 
 void wfmain::setServerToPrefs()
@@ -4980,16 +5013,60 @@ void wfmain::on_afGainSlider_valueChanged(int value)
         prefs.localAFgain = (quint8)(value);
     }
 
-#ifdef Q_OS_ANDROID
-    // Mirror the AF gain onto the OS media volume. Normalize with the
-    // slider's actual maximum -- ranges differ by rig, and dividing by a
-    // fixed 255 would cap the volume below maximum on some models.
-    if (ui->afGainSlider->maximum() > 0)
-        setAndroidSystemVolume((float)value / (float)ui->afGainSlider->maximum());
-#endif
-
     queue->addUnique(priorityImmediate,queueItem(funcAfGain,QVariant::fromValue<ushort>(value),false,currentReceiver));
 }
+
+#ifdef Q_OS_ANDROID
+void wfmain::pollAndroidSystemVolume()
+{
+    const int idx = androidSystemVolumeIndex();
+    if (idx < 0)
+        return;
+
+    if (androidLastKnownVolumeIndex < 0) {
+        // First read: just record the baseline so we don't clobber the AF
+        // slider's restored value with whatever the system happens to be
+        // sitting at when the app starts.
+        androidLastKnownVolumeIndex = idx;
+        return;
+    }
+
+    if (idx == androidLastKnownVolumeIndex)
+        return;
+    androidLastKnownVolumeIndex = idx;
+
+    const int maxIdx = androidSystemVolumeMaxIndex();
+    if (maxIdx <= 0)
+        return;
+
+    // Hardware volume buttons -> AF slider, one-directional: this updates
+    // wfview's own gain but never writes back to the system volume itself.
+    const int sliderMax = ui->afGainSlider->maximum();
+    const int newValue = qBound(0, qRound((float)idx / (float)maxIdx * sliderMax), sliderMax);
+    ui->afGainSlider->setValue(newValue);
+}
+
+void wfmain::adjustAndroidSettingsForKeyboard()
+{
+    AndroidFitToScreenView *view = androidWrappingView(setupui);
+    if (view == Q_NULLPTR)
+        return;
+
+    QWidget *focused = QApplication::focusWidget();
+    const bool focusInSettings = focused != Q_NULLPTR && setupui->isAncestorOf(focused);
+    QInputMethod *im = QGuiApplication::inputMethod();
+
+    if (!focusInSettings || !im->isVisible()) {
+        view->setKeyboardInset(0);
+        return;
+    }
+
+    // Re-fit the whole settings page against the space above the keyboard
+    // instead of the full screen height, so every field -- including
+    // whichever one is focused -- stays within the visible area.
+    view->setKeyboardInset(qRound(im->keyboardRectangle().height()));
+}
+#endif
 
 void wfmain::on_monitorSlider_valueChanged(int value)
 {
@@ -5155,6 +5232,13 @@ void wfmain::handlePttLimit()
 void wfmain::on_saveSettingsBtn_clicked()
 {
     saveSettings(); // save memory, UI, and radio settings
+
+#ifdef Q_OS_ANDROID
+    // Saving settings is the common case for opening this screen at all;
+    // return to the main view the same way the "戻る" button does instead
+    // of leaving the user staring at the settings page.
+    androidClosePopup(setupui);
+#endif
 }
 
 void wfmain::receiveATUStatus(quint8 atustatus)
@@ -8013,9 +8097,9 @@ void wfmain::receiveRigCaps(rigCapabilities* caps)
         if(prefs.enableLAN)
         {
 #ifdef Q_OS_ANDROID
-            // Start every session at 50% AF: the slider drives the tablet's
-            // media volume, and whatever was saved last time (possibly full
-            // blast or silent) is surprising on launch.
+            // Start every session at 50% AF for a predictable, repeatable
+            // level. This is purely wfview's own output gain now -- it no
+            // longer depends on, or writes to, the system volume.
             prefs.localAFgain = 128;
             prefs.rxSetup.localAFgain = 128;
 #endif

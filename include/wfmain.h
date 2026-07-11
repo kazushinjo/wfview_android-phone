@@ -360,6 +360,10 @@ private slots:
     void runShortcut(const QKeySequence k);
 
     void handlePttLimit(); // hit at 3 min transmit length
+#ifdef Q_OS_ANDROID
+    void pollAndroidSystemVolume();
+    void adjustAndroidSettingsForKeyboard();
+#endif
 
     void doShuttle(bool up, quint8 level);
 
@@ -566,6 +570,10 @@ private:
     QCPColorScale * colorScale;
     QTimer * delayedCommand;
     QTimer * pttTimer;
+#ifdef Q_OS_ANDROID
+    QTimer * androidVolumeWatch = Q_NULLPTR;
+    int androidLastKnownVolumeIndex = -1;
+#endif
     uint16_t loopTickCounter;
     uint16_t slowCmdNum=0;
     uint16_t rapidCmdNum=0;
