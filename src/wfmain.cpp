@@ -5743,8 +5743,12 @@ void wfmain::showAndRaiseWidget(QWidget *w)
         w = embed;
     }
     // The TX processor's DSP chain is taller than the screen at the popup
-    // text size; it keeps that size and pans vertically instead.
-    w = androidFitToScreen(w, !fillScreen, embedSource == audioProcWin);
+    // text size; it keeps that size and pans vertically instead. Settings
+    // gets the same treatment: it has no way to detect the system keyboard
+    // covering a field (a "floating" Gboard layout on wide tablets was
+    // observed not to resize the window or report a usable
+    // keyboardRectangle), so let the user scroll the page manually instead.
+    w = androidFitToScreen(w, !fillScreen, embedSource == audioProcWin || embedSource == setupui);
     // Always present the wrapper full screen: a plain show() lets Android
     // size the window arbitrarily and the scaled content gets cropped.
     w->showFullScreen();
