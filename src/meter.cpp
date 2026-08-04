@@ -297,7 +297,8 @@ void meter::paintEvent(QPaintEvent *)
     painter.setFont(QFont(this->fontInfo().family(), fontSize));
 #endif
     widgetWindowHeight = this->height();
-    painter.setWindow(QRect(0, 0, 255+mXstart+15, widgetWindowHeight));
+    const int meterCanvasWidth = 255 + (isAudioFamilyMeter() ? meterOverflowPx : 0);
+    painter.setWindow(QRect(0, 0, meterCanvasWidth+mXstart+15, widgetWindowHeight));
     barHeight = widgetWindowHeight / 2;
 
     // We regenerate the scale graphics if:
@@ -552,9 +553,13 @@ int meter::nearestStep(double d, int stepSize) {
 }
 
 void meter::scaleLogNumbersForDrawing() {
-    currentRect = (int)((1-audiopot[255-(int)current])*255);
-    averageRect = (int)((1-audiopot[255-(int)average])*255);
-    peakRect = (int)((1-audiopot[255-(int)peak])*255);
+    // current/peak/average can now exceed 255 (clipping, see setLevel());
+    // audiopot is a fixed 256-entry table, so clamp the *lookup* only --
+    // drawValue_Log() still needs the true, unclamped magnitude to draw the
+    // over-0dBFS segment.
+    currentRect = (int)((1-audiopot[255-qBound(0,(int)current,255)])*255);
+    averageRect = (int)((1-audiopot[255-qBound(0,(int)average,255)])*255);
+    peakRect = (int)((1-audiopot[255-qBound(0,(int)peak,255)])*255);
 }
 
 void meter::drawValue_Linear(QPainter *qp, bool reverse) {
@@ -702,6 +707,22 @@ void meter::drawValue_Log(QPainter *qp) {
     }
 
     qp->drawRect(mXstart+peakRect-1,mYstart,2,barHeight);
+
+    // Clipping (>0dBFS): current/peak can exceed 255 now (see setLevel()),
+    // representing up to +6dBFS of overshoot linearly in the extra width
+    // reserved by meterOverflowPx, past the log-taper table's normal edge.
+    if (isAudioFamilyMeter()) {
+        qp->setBrush(Qt::red);
+        qp->setPen(Qt::red);
+        if (current > 255.0) {
+            const int overflowPx = qBound(0, qRound(current - 255.0), meterOverflowPx);
+            qp->drawRect(mXstart+255, mYstart, overflowPx, barHeight);
+        }
+        if (peak > 255.0) {
+            const int overflowPeakPx = qBound(0, qRound(peak - 255.0), meterOverflowPx);
+            qp->drawRect(mXstart+255+overflowPeakPx-1, mYstart, 2, barHeight);
+        }
+    }
 }
 
 void meter::setLevel(double current)
@@ -965,6 +986,18 @@ void meter::drawScale_dBFs(QPainter *qp)
     qp->drawLine(mXstart,scaleLineYstart,peakRedLevel+mXstart,scaleLineYstart);
     qp->setPen(highLineColor);
     qp->drawLine(peakRedLevel+mXstart,scaleLineYstart,255+mXstart,scaleLineYstart);
+
+    // Overflow zone (>0dBFS): only the log-taper audio meters reserve this
+    // extra width (see meterOverflowPx); linear, unlike the rest of this
+    // scale, since it exists purely to show clipping severity, not level.
+    if (isAudioFamilyMeter()) {
+        qp->setPen(Qt::red);
+        qp->drawLine(255+mXstart,scaleLineYstart,255+meterOverflowPx+mXstart,scaleLineYstart);
+        qp->drawText(255+mXstart+meterOverflowPx/2-8,scaleTextYstart, QString("+3"));
+        qp->drawText(255+mXstart+meterOverflowPx-10,scaleTextYstart, QString("+6"));
+        qp->drawLine(255+mXstart+meterOverflowPx/2,scaleTextYstart, 255+mXstart+meterOverflowPx/2, scaleTextYstart+5);
+        qp->drawLine(255+mXstart+meterOverflowPx,scaleTextYstart, 255+mXstart+meterOverflowPx, scaleTextYstart+5);
+    }
 }
 
 void meter::drawScaleVd(QPainter *qp)

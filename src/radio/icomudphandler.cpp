@@ -185,7 +185,7 @@ void icomUdpHandler::getRxLevels(quint16 amplitudePeak, quint16 amplitudeRMS,qui
     if((audioLevelsRxPosition)%4 == 0)
     {
         // calculate mean and emit signal
-        quint8 meanPeak = findMax(audioLevelsRxPeak);
+        quint16 meanPeak = findMax(audioLevelsRxPeak);
         quint8 meanRMS = findMean(audioLevelsRxRMS);
         networkAudioLevels l;
         l.haveRxLevels = true;
@@ -208,7 +208,7 @@ void icomUdpHandler::getTxLevels(quint16 amplitudePeak, quint16 amplitudeRMS ,qu
     if((audioLevelsTxPosition)%4 == 0)
     {
         // calculate mean and emit signal
-        quint8 meanPeak = findMax(audioLevelsTxPeak);
+        quint16 meanPeak = findMax(audioLevelsTxPeak);
         quint8 meanRMS = findMean(audioLevelsTxRMS);
         networkAudioLevels l;
         l.haveTxLevels = true;
@@ -229,7 +229,7 @@ quint8 icomUdpHandler::findMean(quint8 *data)
     return sum / audioLevelBufferSize;
 }
 
-quint8 icomUdpHandler::findMax(quint8 *data)
+quint16 icomUdpHandler::findMax(quint16 *data)
 {
     unsigned int max=0;
     for(int p=0; p < audioLevelBufferSize; p++)

@@ -310,7 +310,9 @@ bool audioConverter::convert(audioPacket audio)
                 if (err) {
                     qInfo(logAudioConverter()) << "Resampler error " << err << " inFrames:" << inFrames << " outFrames:" << outFrames;
                 }
-                samplesF = Eigen::Map<Eigen::VectorXf>(reinterpret_cast<float*>(scratchOut.data()), scratchOut.size() / int(sizeof(float)));
+                // The resampler updates outFrames to the number of frames it actually produced.
+                // Map only valid samples; mapping the preallocated buffer appends stale data.
+                samplesF = Eigen::Map<Eigen::VectorXf>(reinterpret_cast<float*>(scratchOut.data()), static_cast<int>(outFrames * outFormat.channelCount()));
             }
 
             // ── TX audio processing hook (EQ / compression) ──────────────────
@@ -481,4 +483,3 @@ bool audioConverter::convert(audioPacket audio)
     emit converted(audio);
     return true;
 }
-

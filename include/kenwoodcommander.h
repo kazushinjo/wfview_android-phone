@@ -102,8 +102,11 @@ private:
 
     networkStatus status;
 
-    quint8 audioLevelsTxPeak[audioLevelBufferSize];
-    quint8 audioLevelsRxPeak[audioLevelBufferSize];
+    // quint16, not quint8: a quint8 buffer silently wraps (rather than
+    // clamps) any peak above 255, corrupting the average whenever the
+    // input clips instead of just capping the displayed level at max.
+    quint16 audioLevelsTxPeak[audioLevelBufferSize];
+    quint16 audioLevelsRxPeak[audioLevelBufferSize];
 
     quint8 audioLevelsTxRMS[audioLevelBufferSize];
     quint8 audioLevelsRxRMS[audioLevelBufferSize];
@@ -112,7 +115,7 @@ private:
     quint8 audioLevelsRxPosition = 0;
 
     quint8 findMean(quint8 *d);
-    quint8 findMax(quint8 *d);
+    quint16 findMax(quint16 *d);
 };
 
 

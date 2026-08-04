@@ -105,8 +105,13 @@ public:
             }
         }
         if (s.width() > 0 && s.height() > 0) {
+            // The soft keyboard covers the bottom of the viewport without
+            // resizing it (see setKeyboardInset()); fit against the
+            // remaining space above it instead of the full viewport so the
+            // focused field lands in the visible area rather than under it.
+            const qreal availableHeight = qMax(qreal(1), qreal(viewport()->height() - keyboardInsetPx));
             qreal sx = qreal(viewport()->width()) / s.width();
-            qreal sy = qreal(viewport()->height()) / s.height();
+            qreal sy = availableHeight / s.height();
             if (uniform) {
                 // Popups: keep the widget's own proportions and never blow
                 // small dialogs up into billboard text; letterbox instead.
@@ -120,11 +125,43 @@ public:
         }
     }
 
+    // Reserve `px` of viewport height at the bottom for the soft keyboard
+    // and re-anchor to the top instead of the default centering, so
+    // shrinking the fit area reveals space above the keyboard rather than
+    // leaving the content centered behind it. 0 restores normal centering.
+    void setKeyboardInset(int px)
+    {
+        if (px == keyboardInsetPx)
+            return;
+        keyboardInsetPx = px;
+        setAlignment(px > 0 ? (Qt::AlignHCenter | Qt::AlignTop) : Qt::AlignCenter);
+        refit();
+    }
+
 private:
     QSize naturalSize;
     bool uniform {false};
     bool scrollY {false};
+    int keyboardInsetPx {0};
 };
+
+// Resolve the AndroidFitToScreenView wrapping a proxy-embedded popup widget
+// (see androidClosePopup() above for why window() cannot be used for this).
+// Returns Q_NULLPTR before the widget has been wrapped/shown once.
+inline AndroidFitToScreenView *androidWrappingView(QWidget *inner)
+{
+    if (inner == Q_NULLPTR)
+        return Q_NULLPTR;
+    if (QGraphicsProxyWidget *proxy = inner->graphicsProxyWidget()) {
+        if (proxy->scene() != Q_NULLPTR && !proxy->scene()->views().isEmpty())
+            // AndroidFitToScreenView has no Q_OBJECT macro (a plain
+            // QGraphicsView subclass, not moc'd), so qobject_cast is not
+            // available; every view in this scene was constructed as one
+            // by androidFitToScreen() below, so this is always safe.
+            return static_cast<AndroidFitToScreenView*>(proxy->scene()->views().first());
+    }
+    return Q_NULLPTR;
+}
 
 // Wraps a plain top-level QWidget in an AndroidFitToScreenView the first
 // time it's shown, and returns that view to show()/raise()/activateWindow()

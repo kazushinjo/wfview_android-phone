@@ -17,7 +17,15 @@
 class AndroidLineEdit : public QLineEdit
 {
 public:
-    explicit AndroidLineEdit(QWidget *parent = nullptr) : QLineEdit(parent) {}
+    explicit AndroidLineEdit(QWidget *parent = nullptr) : QLineEdit(parent)
+    {
+        // Every field promoted to this class holds a technical ASCII value
+        // (hostname, port, username, password, hex color) -- never Japanese
+        // text -- but the IME still defaults to the system input language
+        // (e.g. romaji/kana conversion) unless told otherwise. This hints
+        // it to offer a Latin/English layout instead.
+        setInputMethodHints(inputMethodHints() | Qt::ImhLatinOnly | Qt::ImhNoPredictiveText);
+    }
 
 protected:
     void inputMethodEvent(QInputMethodEvent *event) override
