@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.wfview4android"
+    package="org.wfview4android.phone"
     android:installLocation="auto"
     android:versionCode="-- %%INSERT_VERSION_CODE%% --"
     android:versionName="-- %%INSERT_VERSION_NAME%% --">
@@ -22,7 +22,7 @@
         android:name="org.qtproject.qt.android.bindings.QtApplication"
         android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="-- %%INSERT_APP_NAME%% --"
+        android:label="wfview phone"
         android:requestLegacyExternalStorage="true"
         android:allowBackup="true"
         android:fullBackupOnly="false">

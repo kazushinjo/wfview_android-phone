@@ -568,6 +568,8 @@ DISTFILES += \
 # build files, etc. under this directory (populated separately from this file).
 android {
     ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
+    ANDROID_VERSION_NAME = 2026.10.10
+    ANDROID_VERSION_CODE = 20261010
 
     # Phone build: iPhone-style tabbed layout (see src/wfmain.cpp WFVIEW_PHONE)
     # and the RX/TX audio recorder.
