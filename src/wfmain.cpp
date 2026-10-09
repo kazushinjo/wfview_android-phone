@@ -44,6 +44,31 @@ protected:
         const int w = dial->width();
         const int h = dial->height();
         const int ri = qMin(w, h) / 2;
+
+        QPainter p(dial);
+        p.setRenderHint(QPainter::Antialiasing);
+
+        // Notches: Fusion picks a dark notch colour from this palette, which
+        // vanishes against the dark window, so its own notches are turned off
+        // and 40 light ones (a long one every fifth) are drawn here to match
+        // the iPad dial (geometry as in QStyleHelper::calcLines()).
+        {
+            const int notches = 40;
+            const int big = qBound(4, ri / 6, ri / 2);
+            const int small = big / 2;
+            const qreal xc = w / 2 + 0.5;
+            const qreal yc = h / 2 + 0.5;
+            p.setPen(QPen(QColor(235, 235, 235), qMax<qreal>(1.5, w / 120.0)));
+            for (int i = 0; i <= notches; ++i) {
+                const qreal ang = dial->wrapping() ? M_PI * 3 / 2 - i * 2 * M_PI / notches
+                                                   : (M_PI * 8 - i * 10 * M_PI / notches) / 6;
+                const qreal s = qSin(ang), c = qCos(ang);
+                const bool major = (i % 5) == 0;
+                const qreal r0 = major ? ri - big : ri - 1 - small;
+                const qreal r1 = major ? ri : ri - 1;
+                p.drawLine(QPointF(xc + r0 * c, yc - r0 * s), QPointF(xc + r1 * c, yc - r1 * s));
+            }
+        }
         qreal r = ri;
         r -= r / 50;
         const int range = dial->maximum() - dial->minimum();
@@ -67,8 +92,6 @@ protected:
         g.setColorAt(0.4, c.darker(150));
         g.setColorAt(0, c.darker(135));
 
-        QPainter p(dial);
-        p.setRenderHint(QPainter::Antialiasing);
         p.setBrush(g);
         p.setPen(QColor(255, 255, 255, 150));
         p.drawEllipse(dot.adjusted(-1, -1, 1, 1));
@@ -207,20 +230,21 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     installAndroidComboBoxFix(ui->attSelCombo);
     installAndroidComboBoxFix(ui->antennaSelCombo);
     ui->horizontalLayout_2->setSpacing(androidDp(28));
-    ui->freqDial->setFixedSize(androidDp(260), androidDp(260));
+    ui->freqDial->setFixedSize(androidDp(336), androidDp(336));
     // Radius must stay exactly half the dial's size for a circular look.
     ui->freqDial->setStyleSheet(
         QString("QDial { background-color: #f6d6a8; border-radius: %1px; }")
-            .arg(androidDp(260) / 2));
+            .arg(androidDp(336) / 2));
+    ui->freqDial->setNotchesVisible(false);
     ui->freqDial->installEventFilter(new DialDotDarkener(ui->freqDial));
     QLabel *frequencyDialLabel = new QLabel(QStringLiteral("周波数ダイアル"), ui->mainGroup);
     frequencyDialLabel->setObjectName(QStringLiteral("frequencyDialLabel"));
     frequencyDialLabel->setAlignment(Qt::AlignCenter);
     ui->tuningLayout->insertWidget(0, frequencyDialLabel);
-    ui->tuningLayout->setContentsMargins(androidDp(30), 0, 0, androidDp(6));
+    ui->tuningLayout->setContentsMargins(androidDp(30), -androidDp(24), 0, 0);
     ui->tuningLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
     ui->tuningLayout->setAlignment(ui->freqDial, Qt::AlignCenter);
-    ui->tuningLayout->insertSpacing(2, androidDp(4));
+    ui->tuningLayout->insertSpacing(2, androidDp(24));
 
     QHBoxLayout *fineLockLayout = new QHBoxLayout;
     fineLockLayout->setContentsMargins(0, 0, 0, 0);
@@ -233,10 +257,10 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     ritInlineLayout->setContentsMargins(0, 0, 0, 0);
     ritInlineLayout->setSpacing(androidDp(4));
 
-    QPushButton *fineButton = new QPushButton(QStringLiteral("Fine"), ui->mainGroup);
+    QPushButton *fineButton = new QPushButton(tr("Fine"), ui->mainGroup);
     fineButton->setObjectName(QStringLiteral("fineTuningButton"));
     fineButton->setCheckable(true);
-    fineButton->setFixedWidth(androidDp(80));
+    fineButton->setFixedWidth(androidDp(120));
     // NoFocus like the .ui operating buttons: a tapped button would otherwise
     // keep focus and stay painted with qdarkstyle's blue :focus colour.
     fineButton->setFocusPolicy(Qt::NoFocus);
@@ -246,10 +270,10 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
         "QPushButton:checked { background-color: #f6d6a8; color: #202124; }"));
     fineLockLayout->addWidget(fineButton);
 
-    androidLockButton = new QPushButton(QStringLiteral("Lock"), ui->mainGroup);
+    androidLockButton = new QPushButton(tr("Lock"), ui->mainGroup);
     androidLockButton->setObjectName(QStringLiteral("frequencyLockButton"));
     androidLockButton->setCheckable(true);
-    androidLockButton->setFixedWidth(androidDp(80));
+    androidLockButton->setFixedWidth(androidDp(120));
     androidLockButton->setFocusPolicy(Qt::NoFocus);
     androidLockButton->setToolTip(QStringLiteral("周波数をロックします"));
     androidLockButton->setStyleSheet(QStringLiteral(
@@ -294,7 +318,8 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     cwBarLayout->setContentsMargins(androidDp(10), androidDp(2), androidDp(10), androidDp(2));
     cwBarLayout->setSpacing(androidDp(14));
     androidCwStatusLabel = new QLabel(QStringLiteral("CW"), androidCwBar);
-    androidCwStatusLabel->setStyleSheet(QStringLiteral("color: #8fb8d0;"));
+    androidCwStatusLabel->setStyleSheet(QString("color: #8fb8d0; font-size: %1px;")
+        .arg(QFontInfo(QApplication::font()).pixelSize()));
     androidCwTextLabel = new QLabel(androidCwBar);
     androidCwTextLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     androidCwTextLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
@@ -303,7 +328,8 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     cwFont.setPointSizeF(androidDpF(20.0));
     cwFont.setBold(true);
     androidCwTextLabel->setFont(cwFont);
-    androidCwTextLabel->setStyleSheet(QStringLiteral("color: #e6f4ff;"));
+    androidCwTextLabel->setStyleSheet(QString("color: #e6f4ff; font-size: %1px;")
+        .arg(QFontInfo(cwFont).pixelSize()));
     cwBarLayout->addWidget(androidCwStatusLabel);
     cwBarLayout->addWidget(androidCwTextLabel, 1);
     ui->verticalLayout->insertWidget(0, androidCwBar);
@@ -919,7 +945,7 @@ void wfmain::openRig()
     }
 
     emit connectionStatus(true); // Signal any other parts that need to know if we are connecting/connected.
-    ui->connectBtn->setText("Cancel connection"); // We are attempting to connect
+    ui->connectBtn->setText(tr("Cancel connection")); // We are attempting to connect
     connStatus = connConnecting;
     isRadioAdmin = true; // Set user to admin, will be reset if not.
     // M0VSE: This could be in a better place maybe?
@@ -1664,7 +1690,7 @@ void wfmain::configureVFOs()
         receiver->setUnit((FctlUnit)prefs.frequencyUnits);
         colorPrefsType p = colorPreset[prefs.currentColorPresetNumber];
         receiver->colorPreset(&p);
-        receiver->setIdentity(i==0?"Main Band":"Sub Band");
+        receiver->setIdentity(i==0?tr("Main Band"):tr("Sub Band"));
         ui->vfoLayout->addWidget(receiver);
 
         // Hide any secondary receivers until we need them!
@@ -4674,6 +4700,13 @@ void wfmain::setAppTheme(bool isCustom)
                     "QPushButton:disabled { background-color: #8a9ba6; color: #5b6770;"
                     "  border-color: #7a8a94; }")
                     .arg(androidDp(10)).arg(androidDp(4)).arg(androidDp(10));
+                // One text size on the main screen: widgets built in code (scope
+                // row buttons, Fine/Lock, status bar) otherwise come up larger
+                // than the .ui ones. Popups are separate windows and keep theirs.
+                sheet += QString(
+                    "wfmain QPushButton, wfmain QLabel, wfmain QComboBox,"
+                    " wfmain QCheckBox, wfmain QGroupBox { font-size: %1px; }")
+                    .arg(QFontInfo(QApplication::font()).pixelSize());
                 // Drop-down boxes rounded like the buttons; the arrow area
                 // follows the right-hand corners.
                 sheet += QString(
@@ -6943,7 +6976,7 @@ void wfmain::connectionHandler(bool connect)
     if (connect) {
         openRig();
     } else {
-        ui->connectBtn->setText("Connect to Radio");
+        ui->connectBtn->setText(tr("Connect to Radio"));
         enableRigCtl(false);
         removeRig();
         // Stop time sync timer if running.
@@ -8147,28 +8180,28 @@ void wfmain::receiveRigCaps(rigCapabilities* caps)
 
             receiver->clearData();
 
-            receiver->addData("Data Off",0);
+            receiver->addData(tr("Data Off"),0);
 
             if (rigCaps->commands.contains(funcDATA1Mod))
             {
                 setupui->updateModSourceList(1, rigCaps->inputs);
                 if (!rigCaps->commands.contains(funcDATA2Mod))
                 {
-                    receiver->addData("Data On", 2);
+                    receiver->addData(tr("Data On"), 2);
                 }
             }
 
             if (rigCaps->commands.contains(funcDATA2Mod))
             {
                 setupui->updateModSourceList(2, rigCaps->inputs);
-                receiver->addData("Data 1", 2);
-                receiver->addData("Data 2", 2);
+                receiver->addData(tr("Data 1"), 2);
+                receiver->addData(tr("Data 2"), 2);
             }
 
             if (rigCaps->commands.contains(funcDATA3Mod))
             {
                 setupui->updateModSourceList(3, rigCaps->inputs);
-                receiver->addData("Data 3", 3);
+                receiver->addData(tr("Data 3"), 3);
             }
             setupui->enableModSource(0,rigCaps->commands.contains(funcDATAOffMod));
             setupui->enableModSource(1,rigCaps->commands.contains(funcDATA1Mod));
@@ -8252,7 +8285,7 @@ void wfmain::receiveRigCaps(rigCapabilities* caps)
 
         ui->memoriesBtn->setEnabled(rigCaps->commands.contains(funcMemoryContents));
 
-        ui->connectBtn->setText("Disconnect from Radio"); // We must be connected now.
+        ui->connectBtn->setText(tr("Disconnect from Radio")); // We must be connected now.
         connStatus = connConnected;
 
         // Now we know that we are connected, enable rigctld

@@ -236,14 +236,14 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
     toFixedButton = new QPushButton(tr("To Fixed"));
     toFixedButton->setToolTip(tr("&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Press button to convert center mode spectrum to fixed mode, preserving the range. This allows you to tune without the spectrum moving, in the same currently-visible range that you see now. &lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;The currently-selected edge slot will be overridden.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;"));
 
-    holdButton = new QPushButton("HOLD");
+    holdButton = new QPushButton(tr("HOLD"));
     holdButton->setCheckable(true);
     holdButton->setFocusPolicy(Qt::StrongFocus);
 
     controlSpacer = new QSpacerItem(0,0,QSizePolicy::Expanding,QSizePolicy::Fixed);
     midSpacer = new QSpacerItem(0,0,QSizePolicy::Expanding,QSizePolicy::Fixed);
 
-    clearPeaksButton = new QPushButton("Clear Peaks");
+    clearPeaksButton = new QPushButton(tr("Clear Peaks"));
 
     confButton = new QPushButton("◀");
     confButton->setAccessibleName(tr("Configure Scope"));
@@ -272,16 +272,16 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
     }
     else
     {
-        filterShapeCombo->addItem("Sharp",0);
+        filterShapeCombo->addItem(tr("Sharp"),0);
         if (rigCaps->manufacturer == manufKenwood)
         {
             filterShapeCombo->addItem("Medium",1);
-            filterShapeCombo->addItem("Soft",2);
+            filterShapeCombo->addItem(tr("Soft"),2);
 
         }
         else
         {
-            filterShapeCombo->addItem("Soft",1);
+            filterShapeCombo->addItem(tr("Soft"),1);
         }
     }
     roofingCombo = new QComboBox();
@@ -336,7 +336,7 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
     this->layout->setContentsMargins(5,5,5,5);
 
     for(const auto &sm: rigCaps->scopeModes) {
-        scopeModeCombo->addItem(sm.name, sm.num);
+        scopeModeCombo->addItem(tr(sm.name.toUtf8().constData()), sm.num);
     }
 
     auto it = rigCaps->commands.find(funcScopeEdge);
@@ -344,7 +344,7 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
     {
         for (int i=it->minVal; i<=it->maxVal; i++)
         {
-            edgeCombo->addItem(QString("Fixed Edge %0").arg(i),QVariant::fromValue<uchar>(i));
+            edgeCombo->addItem(tr("Fixed Edge %0").arg(i),QVariant::fromValue<uchar>(i));
         }
     }
 

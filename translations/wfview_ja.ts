@@ -1685,6 +1685,42 @@ with a comma between the low and high range.</source>
         <source>Error, could not interpret your input.                          &lt;br/&gt;Please make sure to place a comma between the frequencies.                          &lt;br/&gt;For example: &apos;7.200, 7.300&apos;</source>
         <translation type="vanished">エラー。入力を解釈できませんでした。                          &lt;br/&gt;周波数の間には必ずカンマを入れてください。                          &lt;br/&gt;例：「7.000、7.200」</translation>
     </message>
+    <message>
+        <source>HOLD</source>
+        <translation>ホールド</translation>
+    </message>
+    <message>
+        <source>Clear Peaks</source>
+        <translation>ピーククリア</translation>
+    </message>
+    <message>
+        <source>Sharp</source>
+        <translation>シャープ</translation>
+    </message>
+    <message>
+        <source>Soft</source>
+        <translation>ソフト</translation>
+    </message>
+    <message>
+        <source>Fixed Edge %0</source>
+        <translation>固定エッジ%0</translation>
+    </message>
+    <message>
+        <source>Center</source>
+        <translation>センター</translation>
+    </message>
+    <message>
+        <source>Fixed</source>
+        <translation>固定</translation>
+    </message>
+    <message>
+        <source>Scroll-C</source>
+        <translation>スクロールC</translation>
+    </message>
+    <message>
+        <source>Scroll-F</source>
+        <translation>スクロールF</translation>
+    </message>
 </context>
 <context>
     <name>repeaterSetup</name>
@@ -2901,7 +2937,7 @@ ONLY use Manual CI-V when Transceive mode is not supported</source>
     </message>
     <message>
         <source>Connect To Radio</source>
-        <translation type="vanished">無線機と接続する</translation>
+        <translation type="vanished">無線機に接続</translation>
     </message>
     <message>
         <location filename="../src/settingswidget.ui" line="925"/>
@@ -3554,12 +3590,12 @@ ONLY use Manual CI-V when Transceive mode is not supported</source>
     <message>
         <location filename="../src/settingswidget.ui" line="1987"/>
         <source>Button On</source>
-        <translation type="unfinished"></translation>
+        <translation>ボタン ON</translation>
     </message>
     <message>
         <location filename="../src/settingswidget.ui" line="2223"/>
         <source>Button Off</source>
-        <translation type="unfinished"></translation>
+        <translation>ボタン OFF</translation>
     </message>
     <message>
         <location filename="../src/settingswidget.ui" line="2253"/>
@@ -3970,7 +4006,7 @@ ONLY use Manual CI-V when Transceive mode is not supported</source>
         <location filename="../src/settingswidget.ui" line="3874"/>
         <location filename="../src/settingswidget.ui" line="3877"/>
         <source>Connect to Radio</source>
-        <translation type="unfinished">無線機と接続する</translation>
+        <translation type="unfinished">無線機に接続</translation>
     </message>
     <message>
         <location filename="../src/settingswidget.cpp" line="48"/>
@@ -4042,7 +4078,7 @@ Receive audio will NOT work until this is corrected
     <message>
         <location filename="../src/settingswidget.cpp" line="1483"/>
         <source>Delete</source>
-        <translation type="unfinished"></translation>
+        <translation>削除</translation>
     </message>
     <message>
         <location filename="../src/settingswidget.cpp" line="1749"/>
@@ -4075,6 +4111,54 @@ Do you want to change it? (0=transparent, 255=opaque)</source>
         <location filename="../src/settingswidget.cpp" line="2684"/>
         <source>Preset Name (10 characters max):</source>
         <translation>プリセット名 (10文字以内):</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>戻る</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>保存</translation>
+    </message>
+    <message>
+        <source>Connect to radio</source>
+        <translation>無線機に接続</translation>
+    </message>
+    <message>
+        <source>Disconnect from radio</source>
+        <translation>無線機から切断</translation>
+    </message>
+    <message>
+        <source>Connection Profile</source>
+        <translation>接続プロファイル</translation>
+    </message>
+    <message>
+        <source>Enter profile name</source>
+        <translation>プロファイル名を入力</translation>
+    </message>
+    <message>
+        <source>Save Connection Profile</source>
+        <translation>接続プロファイルを保存</translation>
+    </message>
+    <message>
+        <source>Profile name:</source>
+        <translation>プロファイル名:</translation>
+    </message>
+    <message>
+        <source>Add User</source>
+        <translation>ユーザー追加</translation>
+    </message>
+    <message>
+        <source>Insert User</source>
+        <translation>ユーザー挿入</translation>
+    </message>
+    <message>
+        <source>Clone User</source>
+        <translation>ユーザー複製</translation>
+    </message>
+    <message>
+        <source>Delete User</source>
+        <translation>ユーザー削除</translation>
     </message>
 </context>
 <context>
@@ -4253,7 +4337,7 @@ Do you want to change it? (0=transparent, 255=opaque)</source>
     <message>
         <location filename="../src/wfmain.ui" line="730"/>
         <source>Other Controls</source>
-        <translation type="unfinished"></translation>
+        <translation>その他</translation>
     </message>
     <message>
         <location filename="../src/wfmain.ui" line="756"/>
@@ -4494,7 +4578,7 @@ Do you want to change it? (0=transparent, 255=opaque)</source>
     <message>
         <location filename="../src/wfmain.ui" line="1322"/>
         <source>Connect to Radio</source>
-        <translation>無線機と接続する</translation>
+        <translation>無線機に接続</translation>
     </message>
     <message>
         <location filename="../src/wfmain.ui" line="1350"/>
@@ -4566,6 +4650,97 @@ Please make sure you have a full backup of your radio before making changes.
 Are you sure you want to continue?
 </source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>保存</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>状態</translation>
+    </message>
+    <message>
+        <source>Freq</source>
+        <translation>周波数</translation>
+    </message>
+    <message>
+        <source>Rig Edit</source>
+        <translation>機種編集</translation>
+    </message>
+    <message>
+        <source>TX Proc</source>
+        <translation>送信処理</translation>
+    </message>
+    <message>
+        <source>RX Proc</source>
+        <translation>受信処理</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>接続</translation>
+    </message>
+    <message>
+        <source>Exit</source>
+        <translation>終了</translation>
+    </message>
+    <message>
+        <source>Disconnect from Radio</source>
+        <translation>無線機から切断</translation>
+    </message>
+    <message>
+        <source>Cancel connection</source>
+        <translation>接続を中止</translation>
+    </message>
+    <message>
+        <source>Fine</source>
+        <translation>微調整</translation>
+    </message>
+    <message>
+        <source>Lock</source>
+        <translation>ロック</translation>
+    </message>
+    <message>
+        <source>Main Band</source>
+        <translation>メインバンド</translation>
+    </message>
+    <message>
+        <source>Sub Band</source>
+        <translation>サブバンド</translation>
+    </message>
+    <message>
+        <source>Data Off</source>
+        <translation>データOFF</translation>
+    </message>
+    <message>
+        <source>Data On</source>
+        <translation>データON</translation>
+    </message>
+    <message>
+        <source>Data 1</source>
+        <translation>データ1</translation>
+    </message>
+    <message>
+        <source>Data 2</source>
+        <translation>データ2</translation>
+    </message>
+    <message>
+        <source>Data 3</source>
+        <translation>データ3</translation>
+    </message>
+    <message>
+        <source>TUNE</source>
+        <translation>チューン</translation>
+    </message>
+</context>
+<context>
+    <name>icomUdpHandler</name>
+    <message>
+        <source>(no tx)</source>
+        <translation>(送信音声なし)</translation>
+    </message>
+    <message>
+        <source>&lt;pre&gt;%1 rx latency: %2 / rtt: %3 ms / loss: %4/%5&lt;/pre&gt;</source>
+        <translation>&lt;pre&gt;%1 受信遅延: %2 / 往復: %3 ms / 欠落: %4/%5&lt;/pre&gt;</translation>
     </message>
 </context>
 </TS>
