@@ -42,6 +42,15 @@ void wfmain::phoneSetupUi()
         QFont apFont = qApp->font();
         apFont.setPointSizeF(10.0);
         qApp->setFont(apFont);
+        // Android also keeps a per-class default font (larger) for buttons,
+        // labels, combos and so on, which wins over the parent's font in
+        // every popup. Set those to the same size so the popups' text fits
+        // the button widths computed for it.
+        for (const char *cls : { "QPushButton", "QToolButton", "QCheckBox", "QRadioButton",
+                                 "QLabel", "QComboBox", "QLineEdit", "QTextEdit",
+                                 "QPlainTextEdit", "QAbstractSpinBox", "QGroupBox",
+                                 "QTabBar", "QHeaderView", "QAbstractItemView", "QMenu" })
+            qApp->setFont(apFont, cls);
 
         // The control section is dense; give it a smaller font than the rest so
         // its labels/buttons fit. Applied to every descendant to override the

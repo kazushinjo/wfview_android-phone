@@ -262,8 +262,18 @@ inline QWidget *androidFitToScreen(QWidget *w, bool uniformScale = false,
         // wrapper itself (unscaled) at the top-left.
         QPushButton *back = new QPushButton(QStringLiteral("← 戻る"), view);
         back->setObjectName(QStringLiteral("wrapperBackButton"));
+#ifdef WFVIEW_PHONE
+        // Phone: size the button to its text (the tablet's design-pixel
+        // size is far too small at the phone's scale).
+        QFont backFont = back->font();
+        backFont.setPointSizeF(14.0);
+        back->setFont(backFont);
+        back->resize(back->sizeHint().expandedTo(QSize(90, 34)));
+        back->move(6, 4);
+#else
         back->setFixedSize(androidDp(156), androidDp(58));
         back->move(androidDp(14), androidDp(10));
+#endif
         back->raise();
         QObject::connect(back, &QPushButton::clicked, view, [view]() {
             androidPresentMainView(view);
