@@ -9,6 +9,8 @@
 #include <QScreen>
 #include <QLayout>
 #include "androidcompat.h"
+#include <QJniObject>
+#include <QCoreApplication>
 #endif
 #endif
 
@@ -122,6 +124,31 @@ int main(int argc, char *argv[])
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 #endif
 #ifdef Q_OS_ANDROID
+#ifdef WFVIEW_PHONE
+    // Phone build: the layout follows the iPhone port, whose sizes are in
+    // iPhone points (landscape short side 393). Keep Qt's high-DPI scaling and
+    // pick the factor that maps this phone's short side to 393 logical
+    // pixels, and render 1pt as 1 logical pixel as iOS does, so the same
+    // numbers give the same proportions on any phone.
+    {
+        QJniObject res = QJniObject::callStaticObjectMethod(
+            "android/content/res/Resources", "getSystem", "()Landroid/content/res/Resources;");
+        QJniObject dm = res.isValid()
+            ? res.callObjectMethod("getDisplayMetrics", "()Landroid/util/DisplayMetrics;")
+            : QJniObject();
+        if (dm.isValid()) {
+            // Qt's own device pixel ratio on Android is 1, so the scale
+            // factor alone sets physical pixels per logical pixel.
+            const int wpx = dm.getField<jint>("widthPixels");
+            const int hpx = dm.getField<jint>("heightPixels");
+            if (wpx > 0 && hpx > 0) {
+                const double factor = qMin(wpx, hpx) / 393.0;
+                qputenv("QT_SCALE_FACTOR", QByteArray::number(factor, 'f', 4));
+            }
+        }
+        qputenv("QT_FONT_DPI", "72");
+    }
+#else
     // wfview's layouts are sized in fixed (desktop-era) pixel amounts.
     // Qt 6's automatic high-DPI scaling (unconditional, unlike Qt 5)
     // blows those up to match this device's DPI, so the UI ends up far
@@ -131,12 +158,14 @@ int main(int argc, char *argv[])
     // this class of tablet's raw resolution.
     qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");
 #endif
+#endif
     QApplication a(argc, argv);
     a.setOrganizationName("wfview4android");
     a.setOrganizationDomain("wfview.org");
     a.setApplicationName("wfview4android");
     a.setDesktopFileName("wfview4android");
 #ifdef Q_OS_ANDROID
+#ifndef WFVIEW_PHONE
     // With high-DPI scaling disabled, widget fonts would render at the
     // same pixel size on every device; scale the application font by the
     // same design-to-device factor as the widget dimensions so text keeps
@@ -149,6 +178,7 @@ int main(int argc, char *argv[])
             f.setPixelSize(qMax(1, androidDp(f.pixelSize())));
         a.setFont(f);
     }
+#endif
 #endif
 #endif
 
@@ -380,8 +410,44 @@ int main(int argc, char *argv[])
         QStatusBar *sb = w.statusBar();
         sb->setParent(w.centralWidget());
         w.centralWidget()->layout()->addWidget(sb);
+#ifdef WFVIEW_PHONE
+        // The status text uses a larger font on the phone; give the row the
+        // height it needs and let the tab area absorb the difference, or the
+        // bottom of the text is clipped.
+        sb->setFixedHeight(qMax(sb->sizeHint().height(), sb->minimumSizeHint().height()));
+#endif
     }
+#ifdef WFVIEW_PHONE
+    // Phone: lay out inside the area left by the display cutout, and hide the
+    // status and navigation bars (a swipe from the edge shows them briefly) so
+    // the landscape layout gets the full height, as on the iPhone.
+    w.showMaximized();
+    QNativeInterface::QAndroidApplication::runOnAndroidMainThread([]() {
+        QJniObject activity = QNativeInterface::QAndroidApplication::context();
+        QJniObject window = activity.callObjectMethod("getWindow", "()Landroid/view/Window;");
+        if (!window.isValid())
+            return;
+        const jint sdk = QJniObject::getStaticField<jint>("android/os/Build$VERSION", "SDK_INT");
+        if (sdk >= 30) {
+            QJniObject ctl = window.callObjectMethod("getInsetsController",
+                                                     "()Landroid/view/WindowInsetsController;");
+            if (ctl.isValid()) {
+                const jint bars = QJniObject::callStaticMethod<jint>(
+                    "android/view/WindowInsets$Type", "systemBars", "()I");
+                ctl.callMethod<void>("hide", "(I)V", bars);
+                // BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                ctl.callMethod<void>("setSystemBarsBehavior", "(I)V", 2);
+            }
+        } else {
+            QJniObject decor = window.callObjectMethod("getDecorView", "()Landroid/view/View;");
+            // IMMERSIVE_STICKY | FULLSCREEN | HIDE_NAVIGATION | LAYOUT_STABLE
+            if (decor.isValid())
+                decor.callMethod<void>("setSystemUiVisibility", "(I)V", 0x1000 | 0x4 | 0x2 | 0x100);
+        }
+    });
+#else
     w.showFullScreen();
+#endif
 #else
     w.show();
 #endif

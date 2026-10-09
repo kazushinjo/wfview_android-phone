@@ -19,89 +19,8 @@
 #include <QCoreApplication>
 #include <QInputMethod>
 
-#include <QDial>
 #include <QFrame>
-#include <QPainter>
-#include <QtMath>
 #include "cwdecoder.h"
-// Repaints the frequency dial's position dot a little darker than Fusion's
-// default, which uses the same colour as the knob and is hard to see.
-// Position and size follow QStyleHelper::drawDial() in Qt 6.8.
-class DialDotDarkener : public QObject
-{
-public:
-    using QObject::QObject;
-protected:
-    bool eventFilter(QObject *obj, QEvent *event) override
-    {
-        QDial *dial = qobject_cast<QDial *>(obj);
-        if (!dial || event->type() != QEvent::Paint || painting)
-            return QObject::eventFilter(obj, event);
-        painting = true;
-        QApplication::sendEvent(dial, event);
-        painting = false;
-
-        const int w = dial->width();
-        const int h = dial->height();
-        const int ri = qMin(w, h) / 2;
-
-        QPainter p(dial);
-        p.setRenderHint(QPainter::Antialiasing);
-
-        // Notches: Fusion picks a dark notch colour from this palette, which
-        // vanishes against the dark window, so its own notches are turned off
-        // and 40 light ones (a long one every fifth) are drawn here to match
-        // the iPad dial (geometry as in QStyleHelper::calcLines()).
-        {
-            const int notches = 40;
-            const int big = qBound(4, ri / 6, ri / 2);
-            const int small = big / 2;
-            const qreal xc = w / 2 + 0.5;
-            const qreal yc = h / 2 + 0.5;
-            p.setPen(QPen(QColor(235, 235, 235), qMax<qreal>(1.5, w / 120.0)));
-            for (int i = 0; i <= notches; ++i) {
-                const qreal ang = dial->wrapping() ? M_PI * 3 / 2 - i * 2 * M_PI / notches
-                                                   : (M_PI * 8 - i * 10 * M_PI / notches) / 6;
-                const qreal s = qSin(ang), c = qCos(ang);
-                const bool major = (i % 5) == 0;
-                const qreal r0 = major ? ri - big : ri - 1 - small;
-                const qreal r1 = major ? ri : ri - 1;
-                p.drawLine(QPointF(xc + r0 * c, yc - r0 * s), QPointF(xc + r1 * c, yc - r1 * s));
-            }
-        }
-        qreal r = ri;
-        r -= r / 50;
-        const int range = dial->maximum() - dial->minimum();
-        const int pos = dial->invertedAppearance()
-                ? dial->maximum() - dial->sliderPosition() : dial->sliderPosition();
-        qreal a = M_PI / 2;
-        if (range != 0)
-            a = dial->wrapping()
-                ? M_PI * 3 / 2 - (pos - dial->minimum()) * 2 * M_PI / range
-                : (M_PI * 8 - (pos - dial->minimum()) * 10 * M_PI / range) / 6;
-        const qreal len = ri - qBound(4, ri / 6, ri / 2) - 3;
-        const QPointF dp(w / 2.0 + 0.7 * len * qCos(a), h / 2.0 - 0.7 * len * qSin(a));
-        const qreal ds = r / 7.0;
-        const QRectF dot(dp.x() - ds, dp.y() - ds, 2 * ds, 2 * ds);
-
-        QColor c = dial->palette().button().color();
-        c.setHsv(c.hue(), qMin(140, c.saturation()), qMax(180, c.value()));
-        QRadialGradient g(dot.center().x() + dot.width() / 2, dot.center().y() + dot.width(),
-                          dot.width() * 2, dot.center().x(), dot.center().y());
-        g.setColorAt(1, c.darker(175));
-        g.setColorAt(0.4, c.darker(150));
-        g.setColorAt(0, c.darker(135));
-
-        p.setBrush(g);
-        p.setPen(QColor(255, 255, 255, 150));
-        p.drawEllipse(dot.adjusted(-1, -1, 1, 1));
-        p.setPen(QColor(0, 0, 0, 80));
-        p.drawEllipse(dot);
-        return true;
-    }
-private:
-    bool painting = false;
-};
 
 // Qt's low-latency Android audio path does not automatically duck with the
 // OS media (STREAM_MUSIC) volume the way a normal MediaPlayer stream would,
@@ -183,133 +102,12 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     ui->monitorLabel->setText("Mon");
 
 #ifdef Q_OS_ANDROID
-    // Touch-first tuning controls, same presentation as the iPad port:
-    // a large pale-orange frequency dial with Fine / Lock buttons and the
-    // RIT controls grouped beneath it. The tuning step is chosen by tapping
-    // a frequency digit, so the desktop step combo is hidden.
-    ui->tuningStepCombo->hide();
-    // Cap the scope area (spectrum + waterfall) so the frequency readout and
-    // the control rows below keep a usable share of the screen.
-    ui->scopeVFOGroup->setMaximumHeight(androidDp(760));
-    // Narrow the main control button column (transmit, tune, CW, repeater,
-    // memory); full-width buttons crowd the middle of the screen.
-    const QList<QPushButton*> controlColButtons = {
-        ui->transmitBtn, ui->tuneNowBtn, ui->cwButton,
-        ui->rptSetupBtn, ui->memoriesBtn
-    };
-    for (QPushButton *cb : controlColButtons)
-        cb->setMaximumWidth(androidDp(300));
-    // Keep the S/SWR meters compact; unconstrained they stretch across the
-    // freed-up width and dwarf the other controls.
-    ui->meterSPoWidget->setMaximumWidth(androidDp(420));
-    ui->meter2Widget->setMaximumWidth(androidDp(420));
-    ui->meter3Widget->setMaximumWidth(androidDp(420));
-    // Tall enough for the scale text row plus the bar; the .ui minimum (30)
-    // lets the native layout squash the meters until the text overlaps.
-    ui->meterSPoWidget->setMinimumHeight(androidDp(96));
-    ui->meter2Widget->setMinimumHeight(androidDp(96));
-    ui->meter3Widget->setMinimumHeight(androidDp(96));
-    // A little air between the S meter and the TX level meter below it.
-    ui->meterLayout->setSpacing(androidDp(16));
-    // These groups depend on the connected radio's capabilities. Keeping the
-    // Designer defaults visible before capability discovery gives the main
-    // window a minimum width larger than the landscape viewport.
-    ui->scopeSettingsGroup->hide();
-    ui->preampAttGroup->hide();
-    ui->antennaGroup->hide();
-    // Move the tuning dial column to the right-hand side of the control row.
-    ui->horizontalLayout_2->removeItem(ui->tuningLayout);
-    ui->horizontalLayout_2->insertLayout(4, ui->tuningLayout);
-    // Keep the preamp/attenuator group compact (wide enough for its title)
-    // and give the control columns an even horizontal rhythm.
-    ui->preampAttGroup->setMaximumWidth(androidDp(410));
-    // These live directly on the native main window, where Qt's own combo
-    // popup never appears on Android (see include/androidcombobox.h);
-    // combos inside proxy-wrapped popups are unaffected.
-    installAndroidComboBoxFix(ui->preampSelCombo);
-    installAndroidComboBoxFix(ui->attSelCombo);
-    installAndroidComboBoxFix(ui->antennaSelCombo);
-    ui->horizontalLayout_2->setSpacing(androidDp(28));
-    ui->freqDial->setFixedSize(androidDp(336), androidDp(336));
-    // Radius must stay exactly half the dial's size for a circular look.
-    ui->freqDial->setStyleSheet(
-        QString("QDial { background-color: #f6d6a8; border-radius: %1px; }")
-            .arg(androidDp(336) / 2));
-    ui->freqDial->setNotchesVisible(false);
-    ui->freqDial->installEventFilter(new DialDotDarkener(ui->freqDial));
-    QLabel *frequencyDialLabel = new QLabel(QStringLiteral("周波数ダイアル"), ui->mainGroup);
-    frequencyDialLabel->setObjectName(QStringLiteral("frequencyDialLabel"));
-    frequencyDialLabel->setAlignment(Qt::AlignCenter);
-    ui->tuningLayout->insertWidget(0, frequencyDialLabel);
-    ui->tuningLayout->setContentsMargins(androidDp(30), -androidDp(24), 0, 0);
-    ui->tuningLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
-    ui->tuningLayout->setAlignment(ui->freqDial, Qt::AlignCenter);
-    ui->tuningLayout->insertSpacing(2, androidDp(24));
+    // Tabbed phone layout (scope / operate / connect), see wfmain_phone.cpp.
+    phoneSetupUi();
 
-    QHBoxLayout *fineLockLayout = new QHBoxLayout;
-    fineLockLayout->setContentsMargins(0, 0, 0, 0);
-    fineLockLayout->setSpacing(androidDp(8));
-
-    ui->horizontalLayout_25->removeWidget(ui->ritTuneDial);
-    ui->horizontalLayout_25->removeWidget(ui->ritEnableChk);
-
-    QHBoxLayout *ritInlineLayout = new QHBoxLayout;
-    ritInlineLayout->setContentsMargins(0, 0, 0, 0);
-    ritInlineLayout->setSpacing(androidDp(4));
-
-    QPushButton *fineButton = new QPushButton(tr("Fine"), ui->mainGroup);
-    fineButton->setObjectName(QStringLiteral("fineTuningButton"));
-    fineButton->setCheckable(true);
-    fineButton->setFixedWidth(androidDp(120));
-    // NoFocus like the .ui operating buttons: a tapped button would otherwise
-    // keep focus and stay painted with qdarkstyle's blue :focus colour.
-    fineButton->setFocusPolicy(Qt::NoFocus);
-    fineButton->setToolTip(QStringLiteral("周波数ダイアルを1 Hzステップに切り替えます"));
-    fineButton->setStyleSheet(QStringLiteral(
-        "QPushButton { border-radius: 8px; }"
-        "QPushButton:checked { background-color: #f6d6a8; color: #202124; }"));
-    fineLockLayout->addWidget(fineButton);
-
-    androidLockButton = new QPushButton(tr("Lock"), ui->mainGroup);
-    androidLockButton->setObjectName(QStringLiteral("frequencyLockButton"));
-    androidLockButton->setCheckable(true);
-    androidLockButton->setFixedWidth(androidDp(120));
-    androidLockButton->setFocusPolicy(Qt::NoFocus);
-    androidLockButton->setToolTip(QStringLiteral("周波数をロックします"));
-    androidLockButton->setStyleSheet(QStringLiteral(
-        "QPushButton { border-radius: 8px; }"
-        "QPushButton:checked { background-color: #f6d6a8; color: #202124; }"));
-    fineLockLayout->addWidget(androidLockButton);
-
-    ritInlineLayout->addWidget(ui->ritTuneDial);
-    ritInlineLayout->addWidget(ui->ritEnableChk);
-    fineLockLayout->addLayout(ritInlineLayout);
-
-    ui->tuningLayout->addLayout(fineLockLayout);
-    connect(fineButton, &QPushButton::toggled, this, [this](bool checked) {
-        androidFineTuning = checked;
-    });
-    connect(androidLockButton, &QPushButton::toggled, this, [this](bool checked) {
-        if (ui->tuneLockChk->isChecked() != checked)
-        {
-            ui->tuneLockChk->blockSignals(true);
-            ui->tuneLockChk->setChecked(checked);
-            ui->tuneLockChk->blockSignals(false);
-        }
-        on_tuneLockChk_clicked(checked);
-    });
-    connect(ui->tuneLockChk, &QCheckBox::toggled, this, [this](bool checked) {
-        if (androidLockButton == nullptr)
-            return;
-        androidLockButton->blockSignals(true);
-        androidLockButton->setChecked(checked);
-        androidLockButton->blockSignals(false);
-    });
-    androidLockButton->setChecked(ui->tuneLockChk->isChecked());
-
-    // Decoded CW: one line at the very top of the window.  New text enters at
+    // Decoded CW: one line at the top of the scope tab.  New text enters at
     // the right and older text scrolls off to the left.  Shown in CW modes only.
-    androidCwBar = new QFrame(ui->centralWidget);
+    androidCwBar = new QFrame();
     androidCwBar->setObjectName(QStringLiteral("cwDecodeBar"));
     androidCwBar->setStyleSheet(QString(
         "QFrame#cwDecodeBar { background-color: #1b2630; border: 1px solid #3c5566;"
@@ -332,7 +130,7 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
         .arg(QFontInfo(cwFont).pixelSize()));
     cwBarLayout->addWidget(androidCwStatusLabel);
     cwBarLayout->addWidget(androidCwTextLabel, 1);
-    ui->verticalLayout->insertWidget(0, androidCwBar);
+    ui->scopeVFOLayout->insertWidget(0, androidCwBar);
     androidCwBar->hide();
 
     // Ask for the microphone up front: without the runtime grant Android
@@ -357,16 +155,6 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     // whichever input (USB/LAN/Mic...) is currently active.
     ui->modSliderLbl->setText(QStringLiteral("MOD"));
 
-    // "ヘルプ" opens the bundled operation manual; insert it in the bottom
-    // function-button row before the Connect button.
-    QPushButton *helpButton = new QPushButton(tr("ヘルプ"), this);
-    helpButton->setObjectName(QStringLiteral("androidHelpBtn"));
-    helpButton->setToolTip(QStringLiteral("操作説明書を表示します"));
-    {
-        const int connectIndex = ui->horizontalLayout_16->indexOf(ui->connectBtn);
-        ui->horizontalLayout_16->insertWidget(connectIndex >= 0 ? connectIndex : -1, helpButton);
-    }
-    connect(helpButton, &QPushButton::clicked, this, &wfmain::showAndroidHelp);
 #endif
 
     // Accessibility: the operating buttons are NoFocus in the .ui so the tuning
@@ -559,115 +347,34 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
 
     setDefaultColorPresets();
 
-#ifdef Q_OS_ANDROID
-    // Raise the level sliders: remove the expanding spacer above them so the
-    // tall sliders don't overlap the "Other Controls" label below.
-    ui->controlsLayout->removeItem(ui->verticalSpacer);
-    // Add a "WF" column to the RF/AF/SQL level-slider group: a vertical slider
-    // that sets the waterfall colour floor at runtime, independent of the
-    // spectrum. Mirrors the RF/AF/SQL columns (slider on top, label below).
-    {
-        QFont mg = ui->mainGroup->font();
-        mg.setPointSizeF(androidDpF(16.0));
-        mg.setBold(true);
-        QVBoxLayout *wfCol = new QVBoxLayout();
-        wfCol->setSpacing(androidDp(6)); // same slider-to-label gap as the .ui columns
-        androidWfLevelSlider = new QSlider(Qt::Vertical);
-        androidWfLevelSlider->setRange(0, 160);
-        androidWfLevelSlider->setValue(prefs.mainWfFloor); // finalised after loadSettings()
-        androidWfLevelSlider->setToolTip(QStringLiteral("ウォーターフォールの色レベル(floor)"));
-        // Match the RF/AF/SQL sliders: Fixed policy, 120px minimum height.
-        androidWfLevelSlider->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-        androidWfLevelSlider->setMinimumHeight(androidDp(120));
-        // Stretch the whole level-slider column set for easier finger control.
-        const QList<QSlider*> levelSliders = {
-            ui->rfGainSlider, ui->afGainSlider, ui->sqlSlider,
-            ui->micGainSlider, ui->txPowerSlider, ui->monitorSlider
-        };
-        for (QSlider *ls : levelSliders) {
-            // Same fixed height as the WF slider so the whole row lines up.
-            ls->setMinimumHeight(androidDp(120));
-            ls->setMaximumHeight(androidDp(120));
-            QSizePolicy sp = ls->sizePolicy();
-            sp.setVerticalPolicy(QSizePolicy::Fixed);
-            ls->setSizePolicy(sp);
-        }
-        // Center each slider over its label: the .ui leaves sliders
-        // left-aligned in their columns while the labels are centered.
-        for (int i = 0; i < ui->levelsHorizontalLayout->count(); ++i) {
-            QVBoxLayout *col = qobject_cast<QVBoxLayout*>(
-                ui->levelsHorizontalLayout->itemAt(i) ? ui->levelsHorizontalLayout->itemAt(i)->layout() : nullptr);
-            if (col == nullptr) continue;
-            for (int j = 0; j < col->count(); ++j) {
-                QWidget *cw = col->itemAt(j) ? col->itemAt(j)->widget() : nullptr;
-                if (cw != nullptr && qobject_cast<QSlider*>(cw) != nullptr)
-                    col->setAlignment(cw, Qt::AlignHCenter);
-            }
-        }
-        // Unify the level labels: the .ui caps them at 15px which clips the
-        // scaled-up font, and sizes varied between columns. Same font and
-        // height as the WF label for the whole row.
-        const QList<QLabel*> levelLabels = {
-            ui->rfGainLabel, ui->afGainLabel, ui->squelchLabel,
-            ui->modSliderLbl, ui->txPowerLabel, ui->monitorLabel
-        };
-        for (QLabel *ll : levelLabels) {
-            ll->setMinimumHeight(androidDp(34));
-            ll->setMaximumHeight(androidDp(40));
-            ll->setFont(mg);
-            ll->setAlignment(Qt::AlignHCenter);
-        }
-        androidWfLevelLabel = new QLabel(QStringLiteral("WF"));
-        androidWfLevelLabel->setAlignment(Qt::AlignHCenter);
-        androidWfLevelLabel->setFont(mg);
-        // Same label box as the other columns so the whole column lines up.
-        androidWfLevelLabel->setMinimumHeight(androidDp(34));
-        androidWfLevelLabel->setMaximumHeight(androidDp(40));
-        wfCol->addWidget(androidWfLevelSlider, 0, Qt::AlignHCenter);
-        wfCol->addWidget(androidWfLevelLabel, 0);
-        ui->levelsHorizontalLayout->addLayout(wfCol);
-        connect(androidWfLevelSlider, &QSlider::valueChanged, this, [this](int val){
-            prefs.mainWfFloor = val;
-            prefs.subWfFloor = val;
-            prefs.settingsChanged = true;
-            if(!receivers.isEmpty())
-                receivers.first()->setWfRange(val, prefs.mainPlotCeiling);
-            // Persist immediately so the value is applied on the next launch.
-            // Must match the "Interface" group that saveSettings()/loadSettings()
-            // use, or it won't be read back.
-            if(settings){
-                settings->beginGroup("Interface");
-                settings->setValue("MainWfFloor", val);
-                settings->setValue("SubWfFloor", val);
-                settings->endGroup();
-                settings->sync();
-            }
-        });
-    }
-    // A swipe-kill can drop settings writes that were only sync()'d
-    // mid-session. Flush whenever the app leaves the foreground.
-    connect(qApp, &QApplication::applicationStateChanged, this,
-            [this](Qt::ApplicationState state){
-        if(state != Qt::ApplicationActive && settings){
-            settings->beginGroup("Interface");
-            settings->setValue("MainWfFloor", prefs.mainWfFloor);
-            settings->setValue("SubWfFloor", prefs.subWfFloor);
-            settings->endGroup();
-            settings->sync();
-        }
-    });
-#endif
 
     loadSettings(); // Look for saved preferences
 #ifdef Q_OS_ANDROID
-    // The WF-level slider was built before loadSettings(); sync it to the saved
-    // value now (blocking signals so it doesn't overwrite prefs).
-    if(androidWfLevelSlider)
+    // The 操作-tab waterfall-level slider was built before loadSettings(); sync
+    // it to the saved value now (blocking signals so it doesn't overwrite prefs).
+    if(phoneWfLevelSlider)
     {
-        androidWfLevelSlider->blockSignals(true);
-        androidWfLevelSlider->setValue(prefs.mainWfFloor);
-        androidWfLevelSlider->blockSignals(false);
+        phoneWfLevelSlider->blockSignals(true);
+        phoneWfLevelSlider->setValue(prefs.mainWfFloor);
+        phoneWfLevelSlider->blockSignals(false);
+        if(phoneWfLevelLabel)
+            phoneWfLevelLabel->setText(QStringLiteral("WF\n%1").arg(prefs.mainWfFloor));
     }
+    // Show SWR and Tx audio level on the second/third meter rows by default
+    // (desktop default is "None"), so the operate tab is useful without
+    // visiting meter setup. Only applies the default if the user hasn't
+    // already picked a type.
+    if (prefs.meter2Type == meterNone) {
+        prefs.meter2Type = meterSWR;
+    }
+    if (prefs.meter3Type == meterNone) {
+        prefs.meter3Type = meterTxMod;
+    }
+    // The 接続 tab was built before loadSettings(); fill in the saved
+    // connection values and profile list now.
+    refreshConnectionProfileUi();
+    refreshPhoneConnect1Fields();
+    refreshPhoneConnect2Fields();
 #endif
     logWindow->ingestSettings(prefs);
 
@@ -705,7 +412,18 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     if(prefs.hasRunSetup) {
         qDebug(logSystem()) << "Running openRig()";
         openRig();
-    } else {
+    }
+#ifdef Q_OS_ANDROID
+    else {
+        // The phone connects to radios/wfserver over the network only. Skip
+        // the desktop first-run wizard (serial/USB choices, oversized) and open
+        // the compact connection page for the connection details.
+        qInfo(logSystem()) << "First run: showing the compact connect page.";
+        prefs.enableLAN = true;
+        QTimer::singleShot(0, this, [this]() { showPhoneConnect1(); });
+    }
+#else
+    else {
         qInfo(logSystem()) << "Detected first-time run. Showing the First Time Setup widget.";
 
         connect(fts, &FirstTimeSetup::exitProgram, this, [=]() {
@@ -733,6 +451,7 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
         fts->setWindowModality(Qt::ApplicationModal);
         fts->show();
     }
+#endif
 
     cluster = new dxClusterClient();
 
@@ -2361,7 +2080,14 @@ void wfmain::setDefPrefs()
     defPrefs.mainWfTheme = static_cast<int>(QCPColorGradient::gpJet);
     defPrefs.mainPlotFloor = 0;
 #ifdef Q_OS_ANDROID
-    // Waterfall colour floor: adjustable at runtime from the RF/AF slider group.
+    // Phone: the floor/ceiling sliders are hidden, so use fixed values. With
+    // preamp off and RF gain at max the noise floor (about 55-75) lands at the
+    // bottom (black) of the colour scale with floor=0; ceiling=205 leaves
+    // headroom so strong signals don't saturate.
+    defPrefs.mainPlotCeiling = 205;
+    defPrefs.subPlotFloor = 0;
+    defPrefs.subPlotCeiling = 205;
+    // Waterfall colour floor: adjustable at runtime from the 操作 tab slider.
     // Default 60 so noise is dark out of the box; persisted across launches.
     defPrefs.mainWfFloor = 60;
     defPrefs.subWfFloor = 60;
@@ -2369,11 +2095,13 @@ void wfmain::setDefPrefs()
     defPrefs.mainWfFloor = 0;
     defPrefs.subWfFloor = 0;
 #endif
+#ifndef Q_OS_ANDROID
     defPrefs.mainPlotCeiling = 160;
-    defPrefs.subWflength = 160;
-    defPrefs.subWfTheme = static_cast<int>(QCPColorGradient::gpJet);
     defPrefs.subPlotFloor = 0;
     defPrefs.subPlotCeiling = 160;
+#endif
+    defPrefs.subWflength = 160;
+    defPrefs.subWfTheme = static_cast<int>(QCPColorGradient::gpJet);
     defPrefs.scopeScrollX = 120;
     defPrefs.scopeScrollY = 120;
     defPrefs.confirmExit = true;
@@ -2409,8 +2137,15 @@ void wfmain::setDefPrefs()
 #endif
 
     // Audio
+#ifdef Q_OS_ANDROID
+    // Phones need a larger jitter buffer than desktops (Wi-Fi/cellular);
+    // this is only the first-run default, adjustable on the 接続 tab.
+    defPrefs.rxSetup.latency = 500;
+    defPrefs.txSetup.latency = 500;
+#else
     defPrefs.rxSetup.latency = 150;
     defPrefs.txSetup.latency = 150;
+#endif
     defPrefs.rxSetup.isinput = false;
     defPrefs.txSetup.isinput = true;
     defPrefs.rxSetup.sampleRate = 48000;
@@ -2473,12 +2208,21 @@ void wfmain::loadSettings()
     //ui->scopeEnableWFBtn->setCheckState(Qt::CheckState(prefs.wfEnable));
     prefs.mainWfTheme = settings->value("MainWFTheme", defPrefs.mainWfTheme).toInt();
     prefs.subWfTheme = settings->value("SubWFTheme", defPrefs.subWfTheme).toInt();
+#ifdef Q_OS_ANDROID
+    // Phone: the floor/ceiling sliders are hidden, so always use the fixed
+    // defaults from setDefPrefs() and ignore stored values from older builds.
+    prefs.mainPlotFloor = defPrefs.mainPlotFloor;
+    prefs.subPlotFloor = defPrefs.subPlotFloor;
+    prefs.mainPlotCeiling = defPrefs.mainPlotCeiling;
+    prefs.subPlotCeiling = defPrefs.subPlotCeiling;
+#else
     prefs.mainPlotFloor = settings->value("MainPlotFloor", defPrefs.mainPlotFloor).toInt();
-    prefs.mainWfFloor = settings->value("MainWfFloor", defPrefs.mainWfFloor).toInt();
-    prefs.subWfFloor = settings->value("SubWfFloor", defPrefs.subWfFloor).toInt();
     prefs.subPlotFloor = settings->value("SubPlotFloor", defPrefs.subPlotFloor).toInt();
     prefs.mainPlotCeiling = settings->value("MainPlotCeiling", defPrefs.mainPlotCeiling).toInt();
     prefs.subPlotCeiling = settings->value("SubPlotCeiling", defPrefs.subPlotCeiling).toInt();
+#endif
+    prefs.mainWfFloor = settings->value("MainWfFloor", defPrefs.mainWfFloor).toInt();
+    prefs.subWfFloor = settings->value("SubWfFloor", defPrefs.subWfFloor).toInt();
     prefs.scopeScrollX = settings->value("scopeScrollX", defPrefs.scopeScrollX).toInt();
     prefs.scopeScrollY = settings->value("scopeScrollY", defPrefs.scopeScrollY).toInt();
     prefs.decimalSeparator = settings->value("DecimalSeparator", defPrefs.decimalSeparator).toChar();
@@ -3621,6 +3365,11 @@ void wfmain::setManufacturer(manufacturersType_t man)
 
     if (setupui != Q_NULLPTR)
         setupui->refreshCivAddrList();
+#ifdef Q_OS_ANDROID
+    // Keep the 接続-tab CI-V model dropdown in sync with whatever rigList just
+    // loaded (startup, manufacturer change, or a connection-profile load).
+    refreshPhoneCivCombo1();
+#endif
 }
 
 void wfmain::extChangedRsPref(prefRsItem i)
@@ -4623,6 +4372,47 @@ void wfmain::useSystemTheme(bool checked)
     prefs.useSystemTheme = checked;
 }
 
+#ifdef Q_OS_ANDROID
+// Supplemental stylesheet applied on top of the base theme on the phone to make
+// the desktop-oriented UI finger-friendly: larger touch targets and fat
+// scrollbars (same as the iPhone port).
+static QString wfview_phoneTouchStyleSheet()
+{
+    // Touch targets are kept comfortable but compact: the phone screen is far
+    // shorter than a desktop window, so oversized min-heights push content off
+    // the bottom. Text is left to the small app font so labels fit their button.
+    return QStringLiteral(
+        "QPushButton, QToolButton { min-height: 26px; padding: 1px 4px; }"
+        "QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox, QAbstractSpinBox { min-height: 24px; }"
+        // Pin readable dark-theme colours for text-entry fields so the native
+        // style can't supply a light background under the light theme text.
+        "QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QAbstractSpinBox,"
+        " QPlainTextEdit, QTextEdit {"
+        " color: #e6e8ea; background-color: #232a31;"
+        " selection-color: #ffffff; selection-background-color: #2a6ebb;"
+        " border: 1px solid #3c464f; border-radius: 4px; padding: 1px 4px; }"
+        "QLineEdit:disabled, QComboBox:disabled, QAbstractSpinBox:disabled {"
+        " color: #8a9099; background-color: #1b2127; }"
+        "QComboBox QAbstractItemView { color: #e6e8ea; background-color: #232a31;"
+        " selection-background-color: #2a6ebb; }"
+        "QCheckBox::indicator, QRadioButton::indicator { width: 20px; height: 20px; }"
+        "QTabBar::tab { min-height: 28px; padding: 4px 10px; }"
+        "QScrollBar:vertical { width: 22px; }"
+        "QScrollBar:horizontal { height: 22px; }"
+        "QSlider::handle:horizontal { width: 26px; margin: -6px 0; }"
+        "QSlider::handle:vertical { height: 26px; margin: 0 -6px; }"
+        "QMenu::item { min-height: 28px; padding: 5px 20px; }"
+        // Touch leaves the synthesized pointer and focus on the last tapped
+        // button, where qdarkstyle switches to a blue background / white text
+        // until the next touch elsewhere. Pin both to the normal colours.
+        "QPushButton:hover { border: 1px solid #767676; }"
+        "QPushButton:focus { background-color: #313131; color: #eff0f1;"
+        "  border: 1px solid #767676; }"
+        "QPushButton:checked:focus { background-color: #767676; border-color: #6A6969; }"
+    );
+}
+#endif
+
 void wfmain::setAppTheme(bool isCustom)
 {
     if(isCustom)
@@ -4648,78 +4438,18 @@ void wfmain::setAppTheme(bool isCustom)
                 QTextStream ts(&f);
                 QString sheet = ts.readAll();
 #ifdef Q_OS_ANDROID
-                // Rounded corners for the main control buttons: power on/off,
-                // tuner, CW, repeater, split and memory.
-                sheet += QString(
-                    "QPushButton#rigPowerOnBtn, QPushButton#rigPowerOffBtn,"
-                    "QPushButton#tuneNowBtn, QPushButton#cwButton,"
-                    "QPushButton#rptSetupBtn, QPushButton#splitBtn, QPushButton#memoriesBtn"
-                    " { border-radius: %1px; padding: %2px %3px; }")
-                    .arg(androidDp(10)).arg(androidDp(4)).arg(androidDp(10));
-                // Transmit button: pale-green background at all times (crimson
-                // text is applied dynamically while transmitting).
-                sheet += QString(
-                    "QPushButton#transmitBtn { background-color: #81c784; color: white;"
-                    " font-weight: bold; border-radius: %1px; padding: %2px %3px; }")
-                    .arg(androidDp(10)).arg(androidDp(4)).arg(androidDp(10));
-                // Wider slider track and handle for finger operation.
-                sheet += QString(
-                    "QSlider::groove:vertical { width: %1px; border-radius: %2px; }"
-                    "QSlider::handle:vertical { height: %3px; margin: 0 -%4px;"
-                    " border-radius: %5px; }")
-                    .arg(androidDp(12)).arg(androidDp(6)).arg(androidDp(26))
-                    .arg(androidDp(6)).arg(androidDp(9));
-                // Group-box titles: qdarkstyle reserves only 20px above the
-                // frame and pushes the title down 10px, so the Android-sized
-                // font lands inside the frame on top of the content.
-                sheet += QString(
-                    "QGroupBox { margin-top: %1px; }"
-                    "QGroupBox::title { padding-top: 0px; padding-left: %2px;"
-                    " padding-right: %2px; }")
-                    .arg(androidDp(30)).arg(androidDp(10));
-                // A wider drop-down arrow area makes combo boxes easier to
-                // open with a finger.
-                sheet += QString("QComboBox::drop-down { width: %1px; }")
-                    .arg(androidDp(36));
-                // All push buttons: rounded, pale blue with dark text. Touch
-                // leaves the last tapped button in the hover/focus state, where
-                // qdarkstyle switches to white text and a blue background, so
-                // pin those to the normal colours. Checked is a deeper blue,
-                // pressed a little darker.
-                sheet += QString(
-                    "QPushButton { background-color: #cfe8f7; color: #1d2b36;"
-                    "  border: 1px solid #9cc8e3; border-radius: %1px; }"
-                    "QPushButton:hover { background-color: #cfe8f7; color: #1d2b36;"
-                    "  border: 1px solid #9cc8e3; }"
-                    "QPushButton:focus { background-color: #cfe8f7; color: #1d2b36;"
-                    "  border: 1px solid #9cc8e3; }"
-                    "QPushButton:checked, QPushButton:checked:hover, QPushButton:checked:focus"
-                    " { background-color: #8cc4ea; border-color: #5a9bc8; }"
-                    "QPushButton:pressed { background-color: #a9d3ef; padding: %2px %3px; }"
-                    "QPushButton:checked:pressed { background-color: #74b3e0; }"
-                    "QPushButton:disabled { background-color: #8a9ba6; color: #5b6770;"
-                    "  border-color: #7a8a94; }")
-                    .arg(androidDp(10)).arg(androidDp(4)).arg(androidDp(10));
-                // One text size on the main screen: widgets built in code (scope
-                // row buttons, Fine/Lock, status bar) otherwise come up larger
-                // than the .ui ones. Popups are separate windows and keep theirs.
-                sheet += QString(
-                    "wfmain QPushButton, wfmain QLabel, wfmain QComboBox,"
-                    " wfmain QCheckBox, wfmain QGroupBox { font-size: %1px; }")
-                    .arg(QFontInfo(QApplication::font()).pixelSize());
-                // Drop-down boxes rounded like the buttons; the arrow area
-                // follows the right-hand corners.
-                sheet += QString(
-                    "QComboBox { border-radius: %1px; padding-left: %2px; }"
-                    "QComboBox::drop-down { border-top-right-radius: %1px;"
-                    "  border-bottom-right-radius: %1px; }")
-                    .arg(androidDp(10)).arg(androidDp(8));
+                sheet += wfview_phoneTouchStyleSheet();
 #endif
                 qApp->setStyleSheet(sheet);
             }
         }
     } else {
+#ifdef Q_OS_ANDROID
+        // Even with the "system" theme, keep touch-friendly sizing.
+        qApp->setStyleSheet(wfview_phoneTouchStyleSheet());
+#else
         qApp->setStyleSheet("");
+#endif
     }
 }
 
@@ -4952,14 +4682,18 @@ void wfmain::changeTxBtn()
     {
         ui->transmitBtn->setText("送信中");
 #ifdef Q_OS_ANDROID
-        // While transmitting: crimson bold text on the green button.
-        ui->transmitBtn->setStyleSheet("color: crimson; font-weight: bold;");
+        ui->transmitBtn->setStyleSheet("QPushButton{background:#c8ecc8;"
+                                       "color:red;font-weight:bold;"
+                                       "border-radius:8px;padding:2px 8px;"
+                                       "min-height:28px;max-height:28px;}");
 #endif
     } else {
         ui->transmitBtn->setText("送信");
 #ifdef Q_OS_ANDROID
-        // Receiving: revert to the pale-green background style (set globally).
-        ui->transmitBtn->setStyleSheet("");
+        ui->transmitBtn->setStyleSheet("QPushButton{background:#c8ecc8;"
+                                       "color:#0a3a0a;font-weight:bold;"
+                                       "border-radius:8px;padding:2px 8px;"
+                                       "min-height:28px;max-height:28px;}");
 #endif
     }
 }
@@ -5493,6 +5227,27 @@ QString wfmain::connectionProfileStorageKey(const QString& name) const
 void wfmain::refreshConnectionProfileUi()
 {
     setupui->setConnectionProfiles(connectionProfileNames(), currentConnectionProfile);
+#ifdef Q_OS_ANDROID
+    if (phoneProfileCombo1 == Q_NULLPTR)
+        return;
+
+    phoneUpdatingProfileCombo1 = true;
+    phoneProfileCombo1->clear();
+    phoneProfileCombo1->addItems(connectionProfileNames());
+
+    const int index = currentConnectionProfile.isEmpty()
+            ? -1 : phoneProfileCombo1->findText(currentConnectionProfile);
+    if (index >= 0)
+    {
+        phoneProfileCombo1->setCurrentIndex(index);
+    }
+    else
+    {
+        phoneProfileCombo1->setCurrentIndex(-1);
+        phoneProfileCombo1->setEditText(QString());
+    }
+    phoneUpdatingProfileCombo1 = false;
+#endif
 }
 
 void wfmain::saveConnectionProfile(const QString& name)
@@ -5584,8 +5339,10 @@ bool wfmain::loadConnectionProfile(const QString& name)
         udpPrefs.connectionType = static_cast<connectionType_t>(settings->value("ConnectionType", udpPrefs.connectionType).toInt());
         udpPrefs.halfDuplex = settings->value("HalfDuplex", udpPrefs.halfDuplex).toBool();
         prefs.waterfallFormat = settings->value("WaterfallFormat", prefs.waterfallFormat).toInt();
+#ifndef Q_OS_ANDROID
         prefs.rxSetup.latency = settings->value("AudioRXLatency", prefs.rxSetup.latency).toInt();
         prefs.txSetup.latency = settings->value("AudioTXLatency", prefs.txSetup.latency).toInt();
+#endif
         prefs.rxSetup.sampleRate = settings->value("AudioRXSampleRate", prefs.rxSetup.sampleRate).toInt();
         prefs.txSetup.sampleRate = prefs.rxSetup.sampleRate;
         prefs.rxSetup.codec = settings->value("AudioRXCodec", prefs.rxSetup.codec).toInt();
@@ -5626,8 +5383,10 @@ bool wfmain::loadConnectionProfile(const QString& name)
             udpPrefs.connectionType = static_cast<connectionType_t>(settings->value("ConnectionType", udpPrefs.connectionType).toInt());
             udpPrefs.halfDuplex = settings->value("HalfDuplex", udpPrefs.halfDuplex).toBool();
             prefs.waterfallFormat = settings->value("WaterfallFormat", prefs.waterfallFormat).toInt();
+#ifndef Q_OS_ANDROID
             prefs.rxSetup.latency = settings->value("AudioRXLatency", prefs.rxSetup.latency).toInt();
             prefs.txSetup.latency = settings->value("AudioTXLatency", prefs.txSetup.latency).toInt();
+#endif
             prefs.rxSetup.sampleRate = settings->value("AudioRXSampleRate", prefs.rxSetup.sampleRate).toInt();
             prefs.txSetup.sampleRate = prefs.rxSetup.sampleRate;
             prefs.rxSetup.codec = settings->value("AudioRXCodec", prefs.rxSetup.codec).toInt();
@@ -5656,6 +5415,12 @@ bool wfmain::loadConnectionProfile(const QString& name)
     setupui->updateLanPrefs((int)l_all);
     setupui->updateUdpPrefs((int)u_all);
     refreshConnectionProfileUi();
+#ifdef Q_OS_ANDROID
+    // RX/TX jitter-buffer delay is a phone-wide preference set on the 接続
+    // tab, not part of the profile (skipped above); only the connection
+    // fields need resyncing.
+    refreshPhoneConnect1Fields();
+#endif
     showStatusBarText(QString("Selected connection profile: %1").arg(profileName));
     return true;
 }
@@ -7344,6 +7109,13 @@ void wfmain::receiveValue(cacheItem val){
         receivers[val.receiver]->setFrequency(val.value.value<freqt>(),vfo);
         if (val.receiver==0 || vfo == 0)
             rpt->handleUpdateCurrentMainFrequency(val.value.value<freqt>());
+#ifdef Q_OS_ANDROID
+        // Operate-tab mirror shows only the main/selected VFO (VFO A), matching
+        // the scope's main frequency. funcUnselectedFreq (VFO B) sets vfo=1 and
+        // falls through here, so exclude it.
+        if (val.receiver==0 && vfo==0)
+            phoneUpdateFreq(val.value.value<freqt>().Hz);
+#endif
         break;
     case funcModeGet:
     case funcModeTR:
@@ -7894,7 +7666,15 @@ void wfmain::on_showFreqBtn_clicked()
 
 void wfmain::on_showSettingsBtn_clicked()
 {
+#ifdef Q_OS_ANDROID
+    // The full settings window disables its connection fields while
+    // connected/connecting (openRig emits connectionStatus(true)), so on the
+    // phone the user cannot edit host/user/pass there. Use the always-editable
+    // compact connection page instead.
+    showPhoneConnect1();
+#else
     showAndRaiseWidget(setupui);
+#endif
 }
 
 void wfmain::on_scopeMainSubBtn_clicked()

@@ -537,6 +537,47 @@ private:
     QPoint androidHelpPressPos;
     void androidHelpOpenLink(class QTextBrowser *browser, const QUrl &url);
     class QPushButton *androidLockButton = nullptr;
+    // Phone layout (src/wfmain_phone.cpp), ported from the iPhone version.
+    void phoneSetupUi();
+    // Phone-sized connection settings tab (profile selector + host/port/user/
+    // pass + Connect) shown inside the main tab widget instead of the
+    // oversized desktop settings window.
+    QWidget *createPhoneConnect1Tab();
+    void refreshPhoneConnect1Fields();
+    void applyPhoneConnect1Fields();
+    void showPhoneConnect1();
+    // Fill the CI-V model combo from rigList (自動 + every known model name)
+    // and select the entry matching prefs.radioCIVAddr. Called whenever
+    // rigList is rebuilt (see setManufacturer()) so the model names stay in
+    // sync with the loaded .rig files.
+    void refreshPhoneCivCombo1();
+    void phoneUpdateFreq(quint64 hz);
+    class QTabWidget *phoneTabs = nullptr;
+    int phoneConn1TabIndex = -1;
+    class QComboBox *phoneProfileCombo1 = nullptr;
+    class QLineEdit *phoneHostEdit1 = nullptr;
+    class QLineEdit *phonePortEdit1 = nullptr;
+    class QLineEdit *phoneSerialPortEdit1 = nullptr;
+    class QLineEdit *phoneAudioPortEdit1 = nullptr;
+    class QComboBox *phoneCivCombo1 = nullptr;
+    class QLineEdit *phoneUserEdit1 = nullptr;
+    class QLineEdit *phonePassEdit1 = nullptr;
+    bool phoneUpdatingProfileCombo1 = false;
+    // 保存して接続 / 保存のみ row, built with the 接続1 fields but shown under
+    // the delay sliders on the right of the 接続 tab.
+    QWidget *phoneConnectButtons = nullptr;
+    // 接続2 tab: RX/TX audio jitter-buffer delay, phone-wide (not per-profile).
+    QWidget *createPhoneConnect2Tab();
+    void refreshPhoneConnect2Fields();
+    int phoneConn2TabIndex = -1;
+    class QSlider *phoneRxLatencySlider = nullptr;
+    class QLabel *phoneRxLatencyValueLabel = nullptr;
+    class QSlider *phoneTxLatencySlider = nullptr;
+    class QLabel *phoneTxLatencyValueLabel = nullptr;
+    class QLabel *phoneOpFreqLabel = nullptr; // operate-tab frequency mirror
+    class QSlider *phoneWfLevelSlider = nullptr; // operate-tab waterfall color floor
+    class QLabel *phoneWfLevelLabel = nullptr;
+    int phoneStepHz = 1000;
     // CW decoder and its one-line display at the top (CW modes only).
     class CwDecoder *cwDecoder = nullptr;
     class QFrame *androidCwBar = nullptr;

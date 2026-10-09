@@ -2,6 +2,9 @@
 // audiohandleroutput.cpp
 // =============================
 #include "audiohandlerqtoutput.h"
+#ifdef WFVIEW_PHONE
+#include "phonerecorder.h"
+#endif
 #include <QThread>
 #include <QElapsedTimer>
 
@@ -141,6 +144,14 @@ void audioHandlerQtOutput::writeToOutputDevice(QByteArray data, quint32 seq, flo
         p       += written;
         toWrite -= written;
     }
+#endif
+
+#ifdef WFVIEW_PHONE
+    // Tap the RX PCM for the optional on-device recorder (no-op when idle).
+    phoneRecorder::getInstance()->feedRx(data.constData(), static_cast<int>(data.size()),
+        nativeFormat.sampleRate(), nativeFormat.channelCount(),
+        nativeFormat.bytesPerSample(),
+        nativeFormat.sampleFormat() == QAudioFormat::Float);
 #endif
 
     lastReceived.restart();

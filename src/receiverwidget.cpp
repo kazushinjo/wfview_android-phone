@@ -58,7 +58,7 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
     {
         b->setHidden(true);
 #ifdef Q_OS_ANDROID
-        b->setFixedWidth(androidDp(44));
+        b->setMinimumSize(40, 28);   // phone: same as the iPhone port
 #else
         b->setFixedWidth(44);
 #endif
@@ -131,20 +131,13 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
         qDebug() << "Adding VFO" << i << "on receiver" << receiver;
         if (i==0)
         {
-#ifdef Q_OS_ANDROID
-            // Give the frequency readout roughly the same share of the
-            // screen as the iPad port, on any device resolution.
-            fr->setMinimumSize(androidDp(640), androidDp(64));
-            fr->setMaximumSize(androidDp(640), androidDp(64));
-#else
             fr->setMinimumSize(280,30);
             fr->setMaximumSize(280,30);
-#endif
             displayLayout->addWidget(fr);
             freqStepDownButton->setHidden(false);
             freqStepUpButton->setHidden(false);
 #ifdef Q_OS_ANDROID
-            const int stepGap = androidDp(12);
+            const int stepGap = 2;
 #else
             const int stepGap = 12;
 #endif
@@ -156,11 +149,24 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
             // Add the VFO buttons here.
             if (numVFO > 1) {
                 vfoSelectButton->setHidden(false);
+#ifdef Q_OS_ANDROID
+                // Big touch target: at the default size taps were easy to miss
+                // on the phone, making VFO A/B switching feel unresponsive.
+                vfoSelectButton->setMinimumSize(88, 40);
+                {
+                    QFont vf = vfoSelectButton->font();
+                    vf.setPointSizeF(14.0);
+                    vf.setBold(true);
+                    vfoSelectButton->setFont(vf);
+                }
+#endif
                 displayLayout->addWidget(vfoSelectButton);
 
                 displayLSpacer = new QSpacerItem(0,0,QSizePolicy::Expanding,QSizePolicy::Fixed);
                 displayLayout->addSpacerItem(displayLSpacer);
                 if (!receiver) {
+#ifndef Q_OS_ANDROID
+                    // A<>B / A=B / V/M are all dropped on the phone.
                     if (rigCaps->commands.contains(funcVFOEqualAB))
                     {
                         vfoSwapButton->setHidden(false);
@@ -176,28 +182,26 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
                         vfoMemoryButton->setHidden(false);
                         displayLayout->addWidget(vfoMemoryButton);
                     }
+#endif
                     if(rigCaps->commands.contains(funcSatelliteMode)) {
                         satelliteButton->setHidden(false);
                         displayLayout->addWidget(satelliteButton);
                     }
                     displayMSpacer = new QSpacerItem(0,0,QSizePolicy::Expanding,QSizePolicy::Fixed);
                     displayLayout->addSpacerItem(displayMSpacer);
+#ifndef Q_OS_ANDROID
                     if (rigCaps->commands.contains(funcSplitStatus)) {
                         splitButton->setHidden(false);
                         displayLayout->addWidget(splitButton);
                     }
+#endif
                 }
             }
             displayRSpacer = new QSpacerItem(0,0,QSizePolicy::Expanding,QSizePolicy::Fixed);
             displayLayout->addSpacerItem(displayRSpacer);
         } else {
-#ifdef Q_OS_ANDROID
-            fr->setMinimumSize(androidDp(360), androidDp(40));
-            fr->setMaximumSize(androidDp(360), androidDp(40));
-#else
             fr->setMinimumSize(180,20);
             fr->setMaximumSize(180,20);
-#endif
             if (!rigCaps->hasCommand29 && receiver == 1)
             {
                 fr->setVisible(false);
@@ -327,16 +331,43 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
     controlLayout->addWidget(modeCombo);
     controlLayout->addWidget(dataCombo);
     controlLayout->addWidget(filterCombo);
+#ifdef Q_OS_ANDROID
+    dataCombo->hide();   // "Data Off" combo not needed on the phone
+    holdButton->hide();  // HOLD not needed on the phone
+#endif
     controlLayout->addWidget(filterShapeCombo);
     controlLayout->addWidget(roofingCombo);
     controlLayout->addSpacerItem(midSpacer);
     controlLayout->addWidget(clearPeaksButton);
     controlLayout->addWidget(confButton);
 
+#ifdef Q_OS_ANDROID
+    // Make the whole "切り離す" control row 14pt on the phone.
+    {
+        QFont cf = detachButton->font();
+        cf.setPointSizeF(14.0);
+        const QList<QWidget*> row = {
+            detachButton, scopeModeCombo, spanCombo, edgeCombo, edgeButton,
+            toFixedButton, holdButton, modeCombo, dataCombo, filterCombo,
+            filterShapeCombo, roofingCombo, clearPeaksButton, confButton
+        };
+        for(QWidget *w : row) if(w) w->setFont(cf);
+        // Shorter labels so they fit the narrow phone buttons.
+        edgeButton->setText(QStringLiteral("Custom"));
+        clearPeaksButton->setText(QStringLiteral("Clear"));
+    }
+#endif
+
     this->layout->setContentsMargins(5,5,5,5);
 
     for(const auto &sm: rigCaps->scopeModes) {
+#ifdef Q_OS_ANDROID
+        QString nm = sm.name;
+        nm.remove(QStringLiteral(" Mode"));   // "Fixed Mode" -> "Fixed"
+        scopeModeCombo->addItem(nm, sm.num);
+#else
         scopeModeCombo->addItem(tr(sm.name.toUtf8().constData()), sm.num);
+#endif
     }
 
     auto it = rigCaps->commands.find(funcScopeEdge);
@@ -344,7 +375,11 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
     {
         for (int i=it->minVal; i<=it->maxVal; i++)
         {
+#ifdef Q_OS_ANDROID
+            edgeCombo->addItem(QString("Edge %0").arg(i),QVariant::fromValue<uchar>(i));
+#else
             edgeCombo->addItem(tr("Fixed Edge %0").arg(i),QVariant::fromValue<uchar>(i));
+#endif
         }
     }
 
@@ -423,11 +458,7 @@ receiverWidget::receiverWidget(bool scope, uchar receiver, uchar vfo, QWidget *p
 
     QFont font = configGroup->font();
     configGroup->setStyleSheet(QString("QGroupBox{border:1px solid gray;} *{padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px; font-size: %0px;}").arg(font.pointSize()-1));
-#ifdef Q_OS_ANDROID
-    configGroup->setMaximumWidth(androidDp(240));
-#else
     configGroup->setMaximumWidth(240);
-#endif
     configRef = new QSlider(Qt::Orientation::Horizontal);
     configRef->setTickInterval(50);
     configRef->setSingleStep(20);
@@ -1432,7 +1463,9 @@ void receiverWidget::showHideControls(uchar mode)
     configIfShift->setEnabled(rigCaps->commands.contains(funcIFShift) || rigCaps->commands.contains(funcPBTInner));
 
     filterCombo->setVisible(rigCaps->filters.size());
+#ifndef Q_OS_ANDROID
     dataCombo->setVisible(rigCaps->inputs.size());
+#endif
 }
 
 
@@ -1451,7 +1484,9 @@ void receiverWidget::displayScope(bool en)
         });
     }
     this->clearPeaksButton->setVisible(en && rigCaps->hasSpectrum);
+#ifndef Q_OS_ANDROID
     this->holdButton->setVisible(en && rigCaps->commands.contains(funcScopeHold));
+#endif
 }
 
 void receiverWidget::setScopeMode(uchar m)
@@ -1928,6 +1963,22 @@ void receiverWidget::waterfallClick(QMouseEvent *me)
 {
         double x = spectrum->xAxis->pixelToCoord(me->pos().x());
         emit showStatusBarText(QString("Selected %1 MHz").arg(x));
+
+#ifdef Q_OS_ANDROID
+        // On touch devices a single tap on the waterfall tunes there directly:
+        // double-tapping a small target with a finger is awkward. (Desktop keeps
+        // its click=select / double-click=tune behaviour.)
+        if (me->button() == Qt::LeftButton && !freqLock)
+        {
+            vfoCommandType t = queue->getVfoCommand(vfoA, receiver, true);
+            freqt freqGo;
+            freqGo.Hz = roundFrequency((quint64)(x * 1E6), stepSize);
+            freqGo.MHzDouble = (float)freqGo.Hz / 1E6;
+            emit sendTrack(freqGo.Hz - this->freq.Hz);
+            setFrequency(freqGo);
+            queue->addUnique(priorityImmediate, queueItem(t.freqFunc, QVariant::fromValue<freqt>(freqGo), false, t.receiver));
+        }
+#endif
 }
 
 void receiverWidget::scroll(QWheelEvent *we)

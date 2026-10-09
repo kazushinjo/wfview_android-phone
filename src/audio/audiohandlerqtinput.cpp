@@ -1,4 +1,7 @@
 #include "audiohandlerqtinput.h"
+#ifdef WFVIEW_PHONE
+#include "phonerecorder.h"
+#endif
 
 bool audioHandlerQtInput::openDevice() noexcept
 {
@@ -49,7 +52,16 @@ void audioHandlerQtInput::closeDevice() noexcept
 void audioHandlerQtInput::onReadyRead()
 {
     if (!audioDevice) return;
-    tempBuf.data.append(audioDevice->readAll());
+    QByteArray newData = audioDevice->readAll();
+#ifdef WFVIEW_PHONE
+    // Tap the raw mic PCM (before it goes to the network codec) for the
+    // optional on-device recorder (no-op when idle).
+    phoneRecorder::getInstance()->feedTx(newData.constData(), static_cast<int>(newData.size()),
+        nativeFormat.sampleRate(), nativeFormat.channelCount(),
+        nativeFormat.bytesPerSample(),
+        nativeFormat.sampleFormat() == QAudioFormat::Float);
+#endif
+    tempBuf.data.append(newData);
 
     const int bytesPerBlock = nativeFormat.bytesForDuration(setupData.blockSize * 1000);
     while (tempBuf.data.size() >= bytesPerBlock) {

@@ -568,6 +568,12 @@ DISTFILES += \
 # build files, etc. under this directory (populated separately from this file).
 android {
     ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
+
+    # Phone build: iPhone-style tabbed layout (see src/wfmain.cpp WFVIEW_PHONE)
+    # and the RX/TX audio recorder.
+    DEFINES += WFVIEW_PHONE
+    SOURCES += src/audio/phonerecorder.cpp src/wfmain_phone.cpp
+    HEADERS += include/phonerecorder.h
     ANDROID_ABIS = arm64-v8a
 
     # This Qt kit's NDK floor is API 28 (see mkspecs/qdevice.pri); vendored libopus
