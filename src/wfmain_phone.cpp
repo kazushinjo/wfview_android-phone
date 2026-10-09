@@ -13,7 +13,9 @@
 #include <QComboBox>
 #include <QFont>
 #include <QFontDatabase>
+#include <QEvent>
 #include <QFormLayout>
+#include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHash>
@@ -21,6 +23,7 @@
 #include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QPixmap>
 #include <QPushButton>
 #include <QScrollArea>
@@ -31,6 +34,131 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <functional>
+
+// On the phone the host field never brings up the soft keyboard, and the
+// system keyboard is a Japanese IME that composes full-width text. So the
+// host, user and password fields are read-only and a tap opens an in-app
+// keyboard instead: digits, "." , Back and クリア for the host; half-width
+// letters, digits and a few symbols for the user name and password. Keys edit
+// the field directly; tapping anywhere outside the keyboard closes it.
+namespace {
+class PhoneKeypadBackdrop : public QWidget
+{
+public:
+    explicit PhoneKeypadBackdrop(QWidget *parent) : QWidget(parent)
+    {
+        setAttribute(Qt::WA_DeleteOnClose);
+        setGeometry(parent->rect());
+        // The app style sheet gives every QWidget a solid background; keep
+        // this full-window tap catcher see-through so the form stays visible.
+        setObjectName(QStringLiteral("phoneKeypadBackdrop"));
+        setStyleSheet(QStringLiteral("#phoneKeypadBackdrop{background:transparent;}"));
+    }
+protected:
+    void mousePressEvent(QMouseEvent *) override { close(); }
+};
+
+class PhoneKeypadOpener : public QObject
+{
+public:
+    PhoneKeypadOpener(QLineEdit *edit, bool ipOnly) : QObject(edit), edit(edit), ipOnly(ipOnly)
+    {
+        edit->setReadOnly(true);
+        edit->setFocusPolicy(Qt::NoFocus);
+        edit->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject *obj, QEvent *ev) override
+    {
+        if(obj == edit && ev->type() == QEvent::MouseButtonRelease)
+        {
+            openKeypad();
+            return true;
+        }
+        return QObject::eventFilter(obj, ev);
+    }
+
+private:
+    void openKeypad()
+    {
+        QWidget *win = edit->window();
+        PhoneKeypadBackdrop *backdrop = new PhoneKeypadBackdrop(win);
+        QFrame *pad = new QFrame(backdrop);
+        pad->setFrameShape(QFrame::Box);
+        pad->setAutoFillBackground(true);
+        QGridLayout *grid = new QGridLayout(pad);
+        grid->setContentsMargins(6, 6, 6, 6);
+        grid->setSpacing(4);
+        QFont f = pad->font();
+        f.setPointSizeF(ipOnly ? 14.0 : 12.0);
+        QLineEdit *e = edit;
+        auto addKey = [&](const QString &label, int row, int col, int colSpan,
+                          std::function<void()> action) -> QPushButton * {
+            QPushButton *b = new QPushButton(label, pad);
+            b->setFont(f);
+            b->setFocusPolicy(Qt::NoFocus);
+            b->setMinimumSize(ipOnly ? 56 : 36, ipOnly ? 34 : 30);
+            grid->addWidget(b, row, col, 1, colSpan);
+            if(action)
+                QObject::connect(b, &QPushButton::clicked, pad, action);
+            return b;
+        };
+        auto addChar = [&](const QString &ch, int row, int col) -> QPushButton * {
+            QPushButton *b = addKey(ch, row, col, 1, Q_NULLPTR);
+            QObject::connect(b, &QPushButton::clicked, pad, [e, b]() { e->setText(e->text() + b->text()); });
+            return b;
+        };
+        auto back = [e]() { if(!e->text().isEmpty()) e->setText(e->text().chopped(1)); };
+        auto clear = [e]() { e->clear(); };
+
+        if(ipOnly)
+        {
+            const char *digits[3][3] = { {"7", "8", "9"}, {"4", "5", "6"}, {"1", "2", "3"} };
+            for(int r = 0; r < 3; r++)
+                for(int c = 0; c < 3; c++)
+                    addChar(QString::fromLatin1(digits[r][c]), r, c);
+            addChar(QStringLiteral("."), 3, 0);
+            addChar(QStringLiteral("0"), 3, 1);
+            addKey(QStringLiteral("Back"), 3, 2, 1, back);
+            addKey(QStringLiteral("クリア"), 4, 0, 3, clear);
+        }
+        else
+        {
+            const char *rows[4] = { "1234567890", "qwertyuiop", "asdfghjkl-", "zxcvbnm._@" };
+            QList<QPushButton *> letters;
+            for(int r = 0; r < 4; r++)
+                for(int c = 0; c < 10; c++)
+                {
+                    QPushButton *b = addChar(QString(QLatin1Char(rows[r][c])), r, c);
+                    if(QChar::fromLatin1(rows[r][c]).isLetter())
+                        letters.append(b);
+                }
+            QPushButton *shift = addKey(QStringLiteral("大文字"), 4, 0, 3, Q_NULLPTR);
+            shift->setCheckable(true);
+            QObject::connect(shift, &QPushButton::toggled, pad, [letters](bool upper) {
+                for(QPushButton *b : letters)
+                    b->setText(upper ? b->text().toUpper() : b->text().toLower());
+            });
+            addKey(QStringLiteral("Back"), 4, 3, 3, back);
+            addKey(QStringLiteral("クリア"), 4, 6, 4, clear);
+        }
+
+        // Right side of the window, at the field's height if it fits, so the
+        // field stays visible to the left of the keyboard.
+        pad->adjustSize();
+        QPoint pos = edit->mapTo(win, QPoint(0, 0));
+        int x = win->width() - pad->width() - 8;
+        int y = qMax(0, qMin(pos.y(), win->height() - pad->height() - 8));
+        pad->move(x, y);
+        backdrop->show();
+        backdrop->raise();
+    }
+
+    QLineEdit *edit;
+    bool ipOnly;
+};
+}
 
 void wfmain::phoneSetupUi()
     // The .ui is a single large desktop window that does not fit an iPhone.
@@ -553,16 +681,15 @@ QWidget *wfmain::createPhoneConnect1Tab()
     phonePassEdit1 = new QLineEdit(page);
     phonePassEdit1->setEchoMode(QLineEdit::Password);
 
-    const Qt::InputMethodHints latin = Qt::ImhLatinOnly
-            | Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText;
-    phoneHostEdit1->setInputMethodHints(latin);
-    phoneUserEdit1->setInputMethodHints(latin);
-    phonePassEdit1->setInputMethodHints(latin);
+    phoneHostEdit1->setPlaceholderText(QStringLiteral("タップして IP アドレスを入力"));
+    new PhoneKeypadOpener(phoneHostEdit1, true);
+    new PhoneKeypadOpener(phoneUserEdit1, false);
+    new PhoneKeypadOpener(phonePassEdit1, false);
     phonePortEdit1->setInputMethodHints(Qt::ImhDigitsOnly);
     phoneSerialPortEdit1->setInputMethodHints(Qt::ImhDigitsOnly);
     phoneAudioPortEdit1->setInputMethodHints(Qt::ImhDigitsOnly);
 
-    form->addRow(QStringLiteral("ホスト (IP / 名前)"), phoneHostEdit1);
+    form->addRow(QStringLiteral("ホスト (IP)"), phoneHostEdit1);
     form->addRow(QStringLiteral("コントロールポート"), phonePortEdit1);
     // Icom rigs report the serial/audio ports at login, but wfserver and
     // non-default setups need them settable here.
