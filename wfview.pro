@@ -350,6 +350,7 @@ SOURCES += \
     src/audio/spectrumwidget.cpp \
     src/audio/txaudioprocessor.cpp \
     src/audio/rxaudioprocessor.cpp \
+    src/audio/cwdecoder.cpp \
     src/audio/anr/loguru.cpp \
     src/audio/anr/NoiseReduction.cpp \
     src/audio/anr/RealFFTf.cpp \
@@ -442,6 +443,7 @@ HEADERS  += \
     include/txaudioprocessingwidget.h \
     include/txaudioprocessor.h \
     include/rxaudioprocessor.h \
+    include/cwdecoder.h \
     include/rxaudioprocessingwidget.h \
     include/collapsiblesection.h \
     src/audio/speexnrprocessor.h \

@@ -830,6 +830,9 @@ void settingswidget::updateIfPref(prefIfItem pif)
     case if_autoPowerOn:
         quietlyUpdateCheckbox(ui->autoPowerOnChk,prefs->autoPowerOn);
         break;
+    case if_cwDecode:
+        quietlyUpdateCheckbox(ui->cwDecodeChk,prefs->cwDecode);
+        break;
     default:
         qWarning(logGui()) << "Did not understand if pref update item " << (int)pif;
         break;
@@ -2816,6 +2819,12 @@ void settingswidget::on_autoPowerOnChk_clicked(bool checked)
 {
     prefs->autoPowerOn = checked;
     emit changedIfPref(if_autoPowerOn);
+}
+
+void settingswidget::on_cwDecodeChk_clicked(bool checked)
+{
+    prefs->cwDecode = checked;
+    emit changedIfPref(if_cwDecode);
 }
 
 /* End of radio specific settings */

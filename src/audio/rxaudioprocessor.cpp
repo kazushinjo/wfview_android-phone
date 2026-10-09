@@ -13,6 +13,7 @@
 #include "anrnrprocessor.h"
 #include "triple_para.h"
 #include "rxaudioprocessor.h"
+#include "cwdecoder.h"
 #include "logcategories.h"
 #include <cmath>
 #include <algorithm>
@@ -64,6 +65,11 @@ void RxAudioProcessor::setSpectrumFps(int fps)
 // ─── processAudio ────────────────────────────────────────────────────────────
 // Called from the converter thread (TimeCriticalPriority).
 
+void RxAudioProcessor::setCwDecoder(CwDecoder* decoder)
+{
+    m_cwDecoder.store(decoder, std::memory_order_release);
+}
+
 Eigen::VectorXf RxAudioProcessor::processAudio(Eigen::VectorXf samples,
                                                 float sampleRate,
                                                 int   channels)
@@ -113,6 +119,10 @@ Eigen::VectorXf RxAudioProcessor::processAudio(Eigen::VectorXf samples,
     // ── Emit raw input level ─────────────────────────────────────────────────
     const float inputPeak = samples.array().abs().maxCoeff();
     emit rxInputLevel(inputPeak);
+
+    // ── CW decoder tap (raw input, before noise reduction) ──────────────────
+    if (CwDecoder* cwd = m_cwDecoder.load(std::memory_order_acquire))
+        cwd->process(samples.data(), static_cast<int>(samples.size()), sampleRate, channels);
 
     // ── Notify widget of stream channel count (before any downmix) ──────────
     if (sampleRate != m_activeSR || channels != m_activeChannels) {

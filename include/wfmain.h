@@ -537,6 +537,14 @@ private:
     QPoint androidHelpPressPos;
     void androidHelpOpenLink(class QTextBrowser *browser, const QUrl &url);
     class QPushButton *androidLockButton = nullptr;
+    // CW decoder and its one-line display at the top (CW modes only).
+    class CwDecoder *cwDecoder = nullptr;
+    class QFrame *androidCwBar = nullptr;
+    class QLabel *androidCwStatusLabel = nullptr;
+    class QLabel *androidCwTextLabel = nullptr;
+    QString androidCwText;
+    rigMode_t androidCwMode = modeUnknown;
+    void androidSetCwDecodeMode(rigMode_t mode);
     bool androidFineTuning = false; // Force the frequency dial to 1 Hz steps.
     class QSlider *androidWfLevelSlider = nullptr; // waterfall colour floor, in RF/AF slider group
     class QLabel *androidWfLevelLabel = nullptr;

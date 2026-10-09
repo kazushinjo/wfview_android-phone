@@ -47,6 +47,7 @@ using rfft_plan = rfft_plan_i*;
 class SpeexNrProcessor;   // forward — defined in speexnrprocessor.h
 class AnrNrProcessor;     // forward — defined in anrnrprocessor.h
 class TriplePara;         // forward — defined in triple_para.h
+class CwDecoder;          // forward — defined in cwdecoder.h
 
 class RxAudioProcessor : public QObject
 {
@@ -107,6 +108,9 @@ public:
     // Spectrum capture — thread-safe; call from main thread.
     void setSpectrumEnabled(bool en);
     void setSpectrumFps(int fps);   // 1–60; default 10
+
+    // CW decoder fed with the raw RX audio (nullptr = none).  Any thread.
+    void setCwDecoder(CwDecoder* decoder);
 
     // ── Getters ───────────────────────────────────────────────────────────────
     bool  bypassed()       const;
@@ -299,6 +303,8 @@ private:
     bool loadProfileForMode(const QString& modeName);
 
     // ── Debug WAV capture state (converter-thread-only except atomic flag) ────
+    std::atomic<CwDecoder*> m_cwDecoder { nullptr };
+
     std::atomic<bool>      m_debugCapturing   { false };
     std::vector<float>     m_debugCaptureBuf;
     float                  m_debugCaptureSR   = 0.0f;

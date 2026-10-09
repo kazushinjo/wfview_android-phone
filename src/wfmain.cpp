@@ -19,6 +19,67 @@
 #include <QCoreApplication>
 #include <QInputMethod>
 
+#include <QDial>
+#include <QFrame>
+#include <QPainter>
+#include <QtMath>
+#include "cwdecoder.h"
+// Repaints the frequency dial's position dot a little darker than Fusion's
+// default, which uses the same colour as the knob and is hard to see.
+// Position and size follow QStyleHelper::drawDial() in Qt 6.8.
+class DialDotDarkener : public QObject
+{
+public:
+    using QObject::QObject;
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override
+    {
+        QDial *dial = qobject_cast<QDial *>(obj);
+        if (!dial || event->type() != QEvent::Paint || painting)
+            return QObject::eventFilter(obj, event);
+        painting = true;
+        QApplication::sendEvent(dial, event);
+        painting = false;
+
+        const int w = dial->width();
+        const int h = dial->height();
+        const int ri = qMin(w, h) / 2;
+        qreal r = ri;
+        r -= r / 50;
+        const int range = dial->maximum() - dial->minimum();
+        const int pos = dial->invertedAppearance()
+                ? dial->maximum() - dial->sliderPosition() : dial->sliderPosition();
+        qreal a = M_PI / 2;
+        if (range != 0)
+            a = dial->wrapping()
+                ? M_PI * 3 / 2 - (pos - dial->minimum()) * 2 * M_PI / range
+                : (M_PI * 8 - (pos - dial->minimum()) * 10 * M_PI / range) / 6;
+        const qreal len = ri - qBound(4, ri / 6, ri / 2) - 3;
+        const QPointF dp(w / 2.0 + 0.7 * len * qCos(a), h / 2.0 - 0.7 * len * qSin(a));
+        const qreal ds = r / 7.0;
+        const QRectF dot(dp.x() - ds, dp.y() - ds, 2 * ds, 2 * ds);
+
+        QColor c = dial->palette().button().color();
+        c.setHsv(c.hue(), qMin(140, c.saturation()), qMax(180, c.value()));
+        QRadialGradient g(dot.center().x() + dot.width() / 2, dot.center().y() + dot.width(),
+                          dot.width() * 2, dot.center().x(), dot.center().y());
+        g.setColorAt(1, c.darker(175));
+        g.setColorAt(0.4, c.darker(150));
+        g.setColorAt(0, c.darker(135));
+
+        QPainter p(dial);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setBrush(g);
+        p.setPen(QColor(255, 255, 255, 150));
+        p.drawEllipse(dot.adjusted(-1, -1, 1, 1));
+        p.setPen(QColor(0, 0, 0, 80));
+        p.drawEllipse(dot);
+        return true;
+    }
+private:
+    bool painting = false;
+};
+
 // Qt's low-latency Android audio path does not automatically duck with the
 // OS media (STREAM_MUSIC) volume the way a normal MediaPlayer stream would,
 // so without this the hardware volume buttons have no effect at all. Poll
@@ -151,6 +212,7 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
     ui->freqDial->setStyleSheet(
         QString("QDial { background-color: #f6d6a8; border-radius: %1px; }")
             .arg(androidDp(260) / 2));
+    ui->freqDial->installEventFilter(new DialDotDarkener(ui->freqDial));
     QLabel *frequencyDialLabel = new QLabel(QStringLiteral("周波数ダイアル"), ui->mainGroup);
     frequencyDialLabel->setObjectName(QStringLiteral("frequencyDialLabel"));
     frequencyDialLabel->setAlignment(Qt::AlignCenter);
@@ -220,6 +282,32 @@ wfmain::wfmain(const QString settingsFile, const QString logFile, bool debugMode
         androidLockButton->blockSignals(false);
     });
     androidLockButton->setChecked(ui->tuneLockChk->isChecked());
+
+    // Decoded CW: one line at the very top of the window.  New text enters at
+    // the right and older text scrolls off to the left.  Shown in CW modes only.
+    androidCwBar = new QFrame(ui->centralWidget);
+    androidCwBar->setObjectName(QStringLiteral("cwDecodeBar"));
+    androidCwBar->setStyleSheet(QString(
+        "QFrame#cwDecodeBar { background-color: #1b2630; border: 1px solid #3c5566;"
+        " border-radius: %1px; }").arg(androidDp(6)));
+    QHBoxLayout *cwBarLayout = new QHBoxLayout(androidCwBar);
+    cwBarLayout->setContentsMargins(androidDp(10), androidDp(2), androidDp(10), androidDp(2));
+    cwBarLayout->setSpacing(androidDp(14));
+    androidCwStatusLabel = new QLabel(QStringLiteral("CW"), androidCwBar);
+    androidCwStatusLabel->setStyleSheet(QStringLiteral("color: #8fb8d0;"));
+    androidCwTextLabel = new QLabel(androidCwBar);
+    androidCwTextLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    androidCwTextLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    QFont cwFont(QStringLiteral("monospace"));
+    cwFont.setStyleHint(QFont::Monospace);
+    cwFont.setPointSizeF(androidDpF(20.0));
+    cwFont.setBold(true);
+    androidCwTextLabel->setFont(cwFont);
+    androidCwTextLabel->setStyleSheet(QStringLiteral("color: #e6f4ff;"));
+    cwBarLayout->addWidget(androidCwStatusLabel);
+    cwBarLayout->addWidget(androidCwTextLabel, 1);
+    ui->verticalLayout->insertWidget(0, androidCwBar);
+    androidCwBar->hide();
 
     // Ask for the microphone up front: without the runtime grant Android
     // silently records nothing and transmit audio carries no modulation.
@@ -875,6 +963,24 @@ void wfmain::openRig()
         rxProc = new RxAudioProcessor(this);
         rxProc->setNoiseStorePath(m_noiseStorePath);
     }
+#ifdef Q_OS_ANDROID
+    if (!cwDecoder) {
+        cwDecoder = new CwDecoder(this);
+        connect(cwDecoder, &CwDecoder::decodedText, this, [this](QString text) {
+            if (text == QStringLiteral(" ")
+                && (androidCwText.isEmpty() || androidCwText.endsWith(QLatin1Char(' '))))
+                return;
+            androidCwText += text;
+            if (androidCwText.size() > 400)
+                androidCwText.remove(0, androidCwText.size() - 300);
+            androidCwTextLabel->setText(androidCwText);
+        });
+        connect(cwDecoder, &CwDecoder::statusChanged, this, [this](int wpm, int pitchHz) {
+            androidCwStatusLabel->setText(QStringLiteral("CW %1WPM %2Hz").arg(wpm).arg(pitchHz));
+        });
+    }
+    rxProc->setCwDecoder(cwDecoder);
+#endif
     applyRxAudioProcPrefs(prefs.rxAudioProc);
     prefs.rxSetup.rxProc = rxProc;
 
@@ -2259,6 +2365,7 @@ void wfmain::setDefPrefs()
     defPrefs.setRadioTime = false;
     defPrefs.forceVfoMode = true;
     defPrefs.autoPowerOn=true;
+    defPrefs.cwDecode = true;
 
     defPrefs.tcpPort = 0;
     defPrefs.tciPort = 50001;
@@ -2352,6 +2459,7 @@ void wfmain::loadSettings()
     prefs.groupSeparator = settings->value("GroupSeparator", defPrefs.groupSeparator).toChar();
     prefs.forceVfoMode =  settings->value("ForceVfoMode", defPrefs.groupSeparator).toBool();
     prefs.autoPowerOn =  settings->value("AutoPowerOn", defPrefs.autoPowerOn).toBool();
+    prefs.cwDecode = settings->value("CwDecode", defPrefs.cwDecode).toBool();
 
     prefs.drawPeaks = settings->value("DrawPeaks", defPrefs.drawPeaks).toBool();
     prefs.underlayBufferSize = settings->value("underlayBufferSize", defPrefs.underlayBufferSize).toInt();
@@ -3221,6 +3329,11 @@ void wfmain::extChangedIfPref(prefIfItem i)
             receiver->setSeparators(prefs.groupSeparator,prefs.decimalSeparator);
         }
         break;
+    case if_cwDecode:
+#ifdef Q_OS_ANDROID
+        androidSetCwDecodeMode(androidCwMode);
+#endif
+        break;
     default:
         qWarning(logSystem()) << "Did not understand if pref update in wfmain for item " << (int)i;
         break;
@@ -3244,12 +3357,14 @@ void wfmain::extChangedColPref(prefColItem i)
     // Any updated scope colors will cause the scope colorPreset to be changed.
     case col_buttonOff:
     case col_buttonOn:
+#ifndef Q_OS_ANDROID
         ui->scopeDualBtn->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border: 1px solid;}")
                                         .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
         ui->dualWatchBtn->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border: 1px solid;}")
                                         .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
         ui->splitBtn->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border: 1px solid;}")
                                         .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
+#endif
         //    ui->mainSubTrackingBtn->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border: 1px solid;}")
         //                                    .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
     case col_grid:
@@ -3872,6 +3987,7 @@ void wfmain::saveSettings()
     settings->setValue("DecimalSeparator",prefs.decimalSeparator);
     settings->setValue("ForceVfoMode",prefs.forceVfoMode);
     settings->setValue("AutoPowerOn",prefs.autoPowerOn);
+    settings->setValue("CwDecode", prefs.cwDecode);
 
     settings->endGroup();
 
@@ -4539,6 +4655,32 @@ void wfmain::setAppTheme(bool isCustom)
                 // open with a finger.
                 sheet += QString("QComboBox::drop-down { width: %1px; }")
                     .arg(androidDp(36));
+                // All push buttons: rounded, pale blue with dark text. Touch
+                // leaves the last tapped button in the hover/focus state, where
+                // qdarkstyle switches to white text and a blue background, so
+                // pin those to the normal colours. Checked is a deeper blue,
+                // pressed a little darker.
+                sheet += QString(
+                    "QPushButton { background-color: #cfe8f7; color: #1d2b36;"
+                    "  border: 1px solid #9cc8e3; border-radius: %1px; }"
+                    "QPushButton:hover { background-color: #cfe8f7; color: #1d2b36;"
+                    "  border: 1px solid #9cc8e3; }"
+                    "QPushButton:focus { background-color: #cfe8f7; color: #1d2b36;"
+                    "  border: 1px solid #9cc8e3; }"
+                    "QPushButton:checked, QPushButton:checked:hover, QPushButton:checked:focus"
+                    " { background-color: #8cc4ea; border-color: #5a9bc8; }"
+                    "QPushButton:pressed { background-color: #a9d3ef; padding: %2px %3px; }"
+                    "QPushButton:checked:pressed { background-color: #74b3e0; }"
+                    "QPushButton:disabled { background-color: #8a9ba6; color: #5b6770;"
+                    "  border-color: #7a8a94; }")
+                    .arg(androidDp(10)).arg(androidDp(4)).arg(androidDp(10));
+                // Drop-down boxes rounded like the buttons; the arrow area
+                // follows the right-hand corners.
+                sheet += QString(
+                    "QComboBox { border-radius: %1px; padding-left: %2px; }"
+                    "QComboBox::drop-down { border-top-right-radius: %1px;"
+                    "  border-bottom-right-radius: %1px; }")
+                    .arg(androidDp(10)).arg(androidDp(8));
 #endif
                 qApp->setStyleSheet(sheet);
             }
@@ -4845,6 +4987,18 @@ void wfmain::changeFullScreenMode(bool checked)
     }
     prefs.useFullScreen = checked;
 }
+
+#ifdef Q_OS_ANDROID
+void wfmain::androidSetCwDecodeMode(rigMode_t mode)
+{
+    androidCwMode = mode;
+    const bool cwMode = prefs.cwDecode && (mode == modeCW || mode == modeCW_R);
+    if (cwDecoder)
+        cwDecoder->setEnabled(cwMode);
+    if (androidCwBar && androidCwBar->isVisible() != cwMode)
+        androidCwBar->setVisible(cwMode);
+}
+#endif
 
 void wfmain::changeMode(rigMode_t mode, quint8 rx)
 {
@@ -6601,12 +6755,14 @@ void wfmain::useColorPreset(colorPrefsType *cp)
     ui->meter2Widget->setColors(QColor(Qt::red), cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
 #endif
 
+#ifndef Q_OS_ANDROID
     ui->scopeDualBtn->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border: 1px solid;}")
                                     .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
     ui->dualWatchBtn->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border: 1px solid;}")
                                     .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
     ui->splitBtn->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border: 1px solid;}")
                                     .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
+#endif
     //ui->mainSubTrackingBtn->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border: 1px solid;}")
     //                                .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
 
@@ -7182,6 +7338,10 @@ void wfmain::receiveValue(cacheItem val){
             // for this mode (or save the current one before switching away).
             if (rxProc && !m.name.isEmpty())
                 rxProc->setRxMode(m.name);
+#ifdef Q_OS_ANDROID
+            if (m.mk != modeUnknown)
+                androidSetCwDecodeMode(m.mk);
+#endif
         }
         //qDebug() << funcString[val.command] << "receiver:" << val.receiver << "vfo:" << vfo << "mk:" << m.mk << "name:" << m.name << "data:" << m.data << "filter:" << m.filter;
 

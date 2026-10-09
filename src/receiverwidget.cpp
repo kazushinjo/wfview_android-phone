@@ -967,6 +967,7 @@ void receiverWidget::colorPreset(colorPrefsType *cp)
 
     waterfall->setBackground(cp->wfBackground);
 
+#ifndef Q_OS_ANDROID
     holdButton->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border:1px solid;}")
                                   .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
     splitButton->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border:1px solid;}")
@@ -977,6 +978,7 @@ void receiverWidget::colorPreset(colorPrefsType *cp)
                                    .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
     vfoMemoryButton->setStyleSheet(QString("QPushButton {background-color: %0;} QPushButton:checked {background-color: %1;border:1px solid;}")
                                    .arg(cp->buttonOff.name(QColor::HexArgb),cp->buttonOn.name(QColor::HexArgb)));
+#endif
 
 }
 

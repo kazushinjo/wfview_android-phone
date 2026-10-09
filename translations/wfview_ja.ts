@@ -3527,6 +3527,16 @@ ONLY use Manual CI-V when Transceive mode is not supported</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/settingswidget.ui" line="1280"/>
+        <source>CW Decode</source>
+        <translation>CWデコード</translation>
+    </message>
+    <message>
+        <location filename="../src/settingswidget.ui" line="1277"/>
+        <source>Decode received CW and show it at the top of the window (CW mode only)</source>
+        <translation>受信したCWを解読して画面の一番上に表示します(CWモードのときだけ)</translation>
+    </message>
+    <message>
         <location filename="../src/settingswidget.ui" line="1595"/>
         <source>Cluster Spots</source>
         <translation>クラスタースポット</translation>

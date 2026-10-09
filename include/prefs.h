@@ -38,7 +38,8 @@ enum prefIfItem {
     if_separators = 1 << 24,
     if_forceVfoMode = 1 << 25,
     if_autoPowerOn = 1 << 26,
-    if_all = 1 << 27
+    if_cwDecode = 1 << 27,
+    if_all = 1 << 28
 };
 
 enum prefColItem {
@@ -362,6 +363,7 @@ struct preferences {
     QChar groupSeparator;
     bool forceVfoMode;
     bool autoPowerOn;
+    bool cwDecode = true;   // decode received CW (shown in CW modes)
 };
 
 #endif // PREFS_H

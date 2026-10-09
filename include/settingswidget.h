@@ -307,6 +307,7 @@ private slots:
 
     void on_forceVfoModeChk_clicked(bool checked);
     void on_autoPowerOnChk_clicked(bool checked);
+    void on_cwDecodeChk_clicked(bool checked);
 
     void on_networkConnectionTypeCombo_currentIndexChanged(int index);
 
