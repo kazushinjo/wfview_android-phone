@@ -560,7 +560,21 @@ private:
     class QLineEdit *phonePortEdit1 = nullptr;
     class QLineEdit *phoneSerialPortEdit1 = nullptr;
     class QLineEdit *phoneAudioPortEdit1 = nullptr;
-    class QComboBox *phoneCivCombo1 = nullptr;
+    // 機種 tab: manufacturer + model selection (all supported makers).
+    QWidget *createPhoneRigTab();
+    void phoneSelectManufacturer(manufacturersType_t m);
+    void refreshPhoneManufacturer();
+    // 保存して接続 (接続 tab and 機種 tab).
+    void phoneSaveAndConnect();
+    class QFormLayout *phoneConnForm1 = nullptr;
+    class QLabel *phoneModelLabel1 = nullptr;     // 接続 tab: current maker/model
+    class QListWidget *phoneModelList = nullptr;
+    class QPushButton *phoneManufBtns[3] = {nullptr, nullptr, nullptr};
+    class QWidget *phoneKenwoodBox = nullptr;
+    class QCheckBox *phoneAdminChk = nullptr;
+    class QWidget *phoneYaesuBox = nullptr;
+    class QLineEdit *phoneScopePortEdit = nullptr;
+    bool phoneFillingModels = false;
     class QLineEdit *phoneUserEdit1 = nullptr;
     class QLineEdit *phonePassEdit1 = nullptr;
     bool phoneUpdatingProfileCombo1 = false;

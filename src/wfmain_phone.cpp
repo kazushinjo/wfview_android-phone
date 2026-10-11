@@ -26,6 +26,7 @@
 #include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMouseEvent>
 #include <QPixmap>
 #include <QPushButton>
@@ -246,6 +247,8 @@ void wfmain::phoneSetupUi()
             phoneConn1TabIndex = phoneTabs->addTab(connPage, QStringLiteral("接続"));
             phoneConn2TabIndex = phoneConn1TabIndex;
         }
+        // Manufacturer (Icom / Kenwood / Yaesu) and model selection.
+        phoneTabs->addTab(createPhoneRigTab(), QStringLiteral("機種"));
         {
             QFont tbf = phoneTabs->tabBar()->font();
             tbf.setPointSizeF(12.0);
@@ -765,13 +768,14 @@ QWidget *wfmain::createPhoneConnect1Tab()
     outer->addLayout(profRow);
 
     QFormLayout *form = new QFormLayout();
+    phoneConnForm1 = form;
     form->setSpacing(3);
     phoneHostEdit1 = new QLineEdit(page);
     phonePortEdit1 = new QLineEdit(page);
     phoneSerialPortEdit1 = new QLineEdit(page);
     phoneAudioPortEdit1 = new QLineEdit(page);
-    phoneCivCombo1 = new QComboBox(page);
-    phoneCivCombo1->setMinimumHeight(30);
+    phoneModelLabel1 = new QLabel(page);
+    phoneModelLabel1->setMinimumHeight(30);
     phoneUserEdit1 = new QLineEdit(page);
     phonePassEdit1 = new QLineEdit(page);
     phonePassEdit1->setEchoMode(QLineEdit::Password);
@@ -790,7 +794,8 @@ QWidget *wfmain::createPhoneConnect1Tab()
     // non-default setups need them settable here.
     form->addRow(QStringLiteral("シリアルポート (CAT)"), phoneSerialPortEdit1);
     form->addRow(QStringLiteral("オーディオポート"), phoneAudioPortEdit1);
-    form->addRow(QStringLiteral("CI-Vアドレス (機種選択)"), phoneCivCombo1);
+    // Chosen on the 機種 tab; shown here for reference.
+    form->addRow(QStringLiteral("機種 (機種タブで選択)"), phoneModelLabel1);
     form->addRow(QStringLiteral("ユーザー名"), phoneUserEdit1);
     form->addRow(QStringLiteral("パスワード"), phonePassEdit1);
     outer->addLayout(form);
@@ -844,23 +849,36 @@ QWidget *wfmain::createPhoneConnect1Tab()
         else
             showStatusBarText(QStringLiteral("接続設定を保存しました"));
     });
-    connect(connectBtn, &QPushButton::clicked, this, [this]() {
-        // Do NOT reload the selected profile here; that would silently discard
-        // any edits made after selecting it (see SETTINGS_UI_PORTING.md §2).
-        // Instead save the on-screen values into the selected profile, then
-        // connect with them.
-        applyPhoneConnect1Fields();
-        const QString name = phoneProfileCombo1->currentText().trimmed();
-        if(!name.isEmpty())
-            saveConnectionProfile(name);
-        if(connStatus == connDisconnected)
-            connectionHandler(true);
-        // Jump back to the scope tab to watch the connection come up.
-        if(phoneTabs != Q_NULLPTR)
-            phoneTabs->setCurrentIndex(0);
-    });
+    connect(connectBtn, &QPushButton::clicked, this, [this]() { phoneSaveAndConnect(); });
 
     return page;
+}
+
+// Save the 接続-tab fields (and the selected profile) and connect. If already
+// connected, reconnect so a newly chosen model / setting takes effect.
+void wfmain::phoneSaveAndConnect()
+{
+    // Do NOT reload the selected profile here; that would silently discard
+    // any edits made after selecting it (see SETTINGS_UI_PORTING.md §2).
+    // Instead save the on-screen values into the selected profile, then
+    // connect with them.
+    applyPhoneConnect1Fields();
+    const QString name = phoneProfileCombo1->currentText().trimmed();
+    if(!name.isEmpty())
+        saveConnectionProfile(name);
+    if(connStatus == connDisconnected)
+        connectionHandler(true);
+    else
+    {
+        connectionHandler(false);
+        QTimer::singleShot(1000, this, [this]() {
+            if(connStatus == connDisconnected)
+                connectionHandler(true);
+        });
+    }
+    // Jump back to the scope tab to watch the connection come up.
+    if(phoneTabs != Q_NULLPTR)
+        phoneTabs->setCurrentIndex(0);
 }
 
 // Push the 接続1-tab fields into prefs/udpPrefs and persist them.
@@ -878,8 +896,6 @@ void wfmain::applyPhoneConnect1Fields()
     udpPrefs.connectionType = connectionLAN;
     if(udpPrefs.clientName.isEmpty())
         udpPrefs.clientName = QHostInfo::localHostName();
-    if(phoneCivCombo1 != Q_NULLPTR)
-        prefs.radioCIVAddr = (quint8) phoneCivCombo1->currentData().toInt();
     prefs.enableLAN = true;
     prefs.hasRunSetup = true;
     prefs.settingsChanged = true;
@@ -896,38 +912,246 @@ void wfmain::refreshPhoneConnect1Fields()
     phoneSerialPortEdit1->setText(QString::number(udpPrefs.serialLANPort ? udpPrefs.serialLANPort : 50002));
     phoneAudioPortEdit1->setText(QString::number(udpPrefs.audioLANPort ? udpPrefs.audioLANPort : 50003));
     refreshPhoneCivCombo1();
+    refreshPhoneManufacturer();
     phoneUserEdit1->setText(udpPrefs.username);
     phonePassEdit1->setText(udpPrefs.password);
 }
 
-// Fill the CI-V model combo from rigList (自動 + every known model name) and
-// select the entry matching prefs.radioCIVAddr. rigList is keyed by CI-V
-// address and populated from the bundled rigs/*.rig files (see
-// setManufacturer()), so this only needs to run after that.
+static QString phoneManufName(manufacturersType_t m)
+{
+    switch (m) {
+    case manufKenwood: return QStringLiteral("Kenwood");
+    case manufYaesu:   return QStringLiteral("Yaesu");
+    default:           return QStringLiteral("Icom");
+    }
+}
+
+// Fill the 機種-tab model list from rigList (自動 + every model of the current
+// manufacturer) and select prefs.radioCIVAddr. rigList is rebuilt by
+// setManufacturer() from the bundled rigs/*.rig files, which calls this.
 void wfmain::refreshPhoneCivCombo1()
 {
-    if(phoneCivCombo1 == Q_NULLPTR)
+    QString current = QStringLiteral("自動");
+    if (phoneModelList != Q_NULLPTR)
+    {
+        phoneFillingModels = true;
+        phoneModelList->clear();
+        QListWidgetItem *autoItem = new QListWidgetItem(QStringLiteral("自動 (Auto)"));
+        autoItem->setData(Qt::UserRole, 0);
+        phoneModelList->addItem(autoItem);
+        QStringList names;
+        QHash<QString, quint16> idByName;
+        for (auto it = rigList.constBegin(); it != rigList.constEnd(); ++it)
+        {
+            // ID 0 is the generic DEFAULT rig file, i.e. what 自動 uses.
+            if (it.value().model.isEmpty() || it.key() == 0)
+                continue;
+            names << it.value().model;
+            idByName.insert(it.value().model, it.key());
+        }
+        names.sort(Qt::CaseInsensitive);
+        for (const QString &name : names)
+        {
+            quint16 id = idByName.value(name);
+            // Only Icom identifies rigs by a CI-V address worth showing.
+            QString text = name;
+            if (prefs.manufacturer == manufIcom)
+                text += QString(" (0x%1)").arg(id, 2, 16, QLatin1Char('0')).toUpper().replace("0X", "0x");
+            QListWidgetItem *item = new QListWidgetItem(text);
+            item->setData(Qt::UserRole, (int) id);
+            phoneModelList->addItem(item);
+        }
+        int row = 0;
+        for (int r = 0; r < phoneModelList->count(); r++)
+            if (phoneModelList->item(r)->data(Qt::UserRole).toInt() == (int) prefs.radioCIVAddr)
+                row = r;
+        phoneModelList->setCurrentRow(row);
+        current = phoneModelList->item(row)->text();
+        phoneFillingModels = false;
+    }
+    if (phoneModelLabel1 != Q_NULLPTR)
+        phoneModelLabel1->setText(phoneManufName(prefs.manufacturer) + QStringLiteral(" / ") + current);
+}
+
+// Reflect prefs.manufacturer on the 機種 tab buttons and the manufacturer-
+// specific controls, and hide the 接続-tab ports that maker does not use.
+void wfmain::refreshPhoneManufacturer()
+{
+    const int m = (int) prefs.manufacturer;
+    for (int i = 0; i < 3; i++)
+        if (phoneManufBtns[i])
+            phoneManufBtns[i]->setChecked(i == m);
+    if (phoneKenwoodBox)
+        phoneKenwoodBox->setVisible(prefs.manufacturer == manufKenwood);
+    if (phoneAdminChk)
+        phoneAdminChk->setChecked(udpPrefs.adminLogin);
+    if (phoneYaesuBox)
+        phoneYaesuBox->setVisible(prefs.manufacturer == manufYaesu);
+    if (phoneScopePortEdit)
+        phoneScopePortEdit->setText(QString::number(udpPrefs.scopeLANPort));
+    if (phoneConnForm1)
+    {
+        // Kenwood's LAN ports are fixed; only the control port is shown.
+        const bool kw = prefs.manufacturer == manufKenwood;
+        phoneConnForm1->setRowVisible(phoneSerialPortEdit1, !kw);
+        phoneConnForm1->setRowVisible(phoneAudioPortEdit1, !kw);
+        phonePortEdit1->setReadOnly(kw);
+    }
+}
+
+// Switch maker: load its rig list, reset the model to 自動 and the LAN ports
+// (and, for Kenwood, the audio format) to that maker's defaults -- the same
+// as the desktop settings' manufacturer combo.
+void wfmain::phoneSelectManufacturer(manufacturersType_t m)
+{
+    if (connStatus != connDisconnected)
+    {
+        showStatusBarText(QStringLiteral("接続中はメーカーを変更できません。切断してから選んでください"));
+        refreshPhoneManufacturer();
         return;
-    phoneCivCombo1->clear();
-    phoneCivCombo1->addItem(QStringLiteral("自動 (Auto)"), 0);
-    QStringList names;
-    QHash<QString, quint16> civByName;
-    for(auto it = rigList.constBegin(); it != rigList.constEnd(); ++it)
-    {
-        if(it.value().model.isEmpty())
-            continue;
-        names << it.value().model;
-        civByName.insert(it.value().model, it.key());
     }
-    names.sort(Qt::CaseInsensitive);
-    for(const QString &name : names)
+    if (m != prefs.manufacturer)
     {
-        quint16 civ = civByName.value(name);
-        QString hex = QString("%1").arg(civ, 2, 16, QLatin1Char('0')).toUpper();
-        phoneCivCombo1->addItem(QString("%1 (0x%2)").arg(name, hex), (int) civ);
+        // Kenwood forces its own audio format; remember the user's one when
+        // entering Kenwood and put it back when leaving.
+        if (settings != Q_NULLPTR && m == manufKenwood)
+        {
+            settings->beginGroup("PhoneAudioBeforeKenwood");
+            settings->setValue("RxCodec", prefs.rxSetup.codec);
+            settings->setValue("TxCodec", prefs.txSetup.codec);
+            settings->setValue("SampleRate", prefs.rxSetup.sampleRate);
+            settings->endGroup();
+        }
+        else if (settings != Q_NULLPTR && prefs.manufacturer == manufKenwood)
+        {
+            settings->beginGroup("PhoneAudioBeforeKenwood");
+            prefs.rxSetup.codec = settings->value("RxCodec", 4).toInt();
+            prefs.txSetup.codec = settings->value("TxCodec", 4).toInt();
+            prefs.rxSetup.sampleRate = prefs.txSetup.sampleRate =
+                settings->value("SampleRate", 48000).toInt();
+            settings->endGroup();
+        }
+        prefs.manufacturer = m;
+        prefs.radioCIVAddr = 0;
+        switch (m) {
+        case manufKenwood:
+            udpPrefs.controlLANPort = 60000;
+            udpPrefs.audioLANPort = 60001;
+            // Kenwood LAN audio is fixed at 16 kHz LPCM 16 bit.
+            prefs.rxSetup.sampleRate = prefs.txSetup.sampleRate = 16000;
+            prefs.rxSetup.codec = prefs.txSetup.codec = 4;
+            break;
+        case manufYaesu:
+            udpPrefs.controlLANPort = 50000;
+            udpPrefs.serialLANPort = 50001;
+            udpPrefs.audioLANPort = 50002;
+            udpPrefs.scopeLANPort = 50003;
+            break;
+        default:
+            udpPrefs.controlLANPort = 50001;
+            udpPrefs.serialLANPort = 50002;
+            udpPrefs.audioLANPort = 50003;
+            break;
+        }
+        setManufacturer(m);   // rebuilds rigList -> refreshPhoneCivCombo1()
+        prefs.settingsChanged = true;
+        saveSettings();
+        refreshPhoneConnect1Fields();
+        showStatusBarText(phoneManufName(m) + QStringLiteral(" を選びました。機種を選んでから接続してください"));
     }
-    int idx = phoneCivCombo1->findData((int) prefs.radioCIVAddr);
-    phoneCivCombo1->setCurrentIndex(idx >= 0 ? idx : 0);
+    refreshPhoneManufacturer();
+}
+
+QWidget *wfmain::createPhoneRigTab()
+{
+    QWidget *page = new QWidget();
+    QHBoxLayout *h = new QHBoxLayout(page);
+    h->setContentsMargins(14, 8, 14, 8);
+    h->setSpacing(16);
+
+    // Left: maker buttons, then the maker-specific options.
+    QVBoxLayout *left = new QVBoxLayout();
+    left->setSpacing(8);
+    QLabel *ml = new QLabel(QStringLiteral("メーカー"));
+    left->addWidget(ml);
+    const manufacturersType_t makers[3] = { manufIcom, manufKenwood, manufYaesu };
+    for (int i = 0; i < 3; i++)
+    {
+        QPushButton *b = new QPushButton(phoneManufName(makers[i]));
+        b->setCheckable(true);
+        b->setMinimumHeight(40);
+        b->setStyleSheet("QPushButton{border-radius:8px;}"
+                         "QPushButton:checked{background:#2a8bd0;color:white;font-weight:bold;}");
+        connect(b, &QPushButton::clicked, this, [this, i, makers]() { phoneSelectManufacturer(makers[i]); });
+        phoneManufBtns[i] = b;
+        left->addWidget(b);
+    }
+
+    phoneKenwoodBox = new QWidget();
+    QVBoxLayout *kv = new QVBoxLayout(phoneKenwoodBox);
+    kv->setContentsMargins(0, 8, 0, 0);
+    phoneAdminChk = new QCheckBox(QStringLiteral("管理者としてログイン"));
+    kv->addWidget(phoneAdminChk);
+    QLabel *kn = new QLabel(QStringLiteral("ポートは 60000 / 60001 固定、\n音声は 16 kHz LPCM 固定です。"));
+    kn->setWordWrap(true);
+    kv->addWidget(kn);
+    // clicked, not toggled: refreshing the box from prefs (also at startup,
+    // before settings exist) must not save.
+    connect(phoneAdminChk, &QCheckBox::clicked, this, [this](bool on) {
+        udpPrefs.adminLogin = on;
+        prefs.settingsChanged = true;
+        saveSettings();
+    });
+    left->addWidget(phoneKenwoodBox);
+
+    phoneYaesuBox = new QWidget();
+    QHBoxLayout *yv = new QHBoxLayout(phoneYaesuBox);
+    yv->setContentsMargins(0, 8, 0, 0);
+    yv->addWidget(new QLabel(QStringLiteral("スコープポート")));
+    phoneScopePortEdit = new QLineEdit();
+    phoneScopePortEdit->setInputMethodHints(Qt::ImhDigitsOnly);
+    phoneScopePortEdit->setMaximumWidth(90);
+    yv->addWidget(phoneScopePortEdit);
+    yv->addStretch(1);
+    connect(phoneScopePortEdit, &QLineEdit::editingFinished, this, [this]() {
+        quint16 p = (quint16) phoneScopePortEdit->text().toUInt();
+        udpPrefs.scopeLANPort = p ? p : 50003;
+        prefs.settingsChanged = true;
+        saveSettings();
+    });
+    left->addWidget(phoneYaesuBox);
+    left->addStretch(1);
+    QPushButton *connectBtn = new QPushButton(QStringLiteral("保存して接続"));
+    connectBtn->setMinimumHeight(40);
+    connect(connectBtn, &QPushButton::clicked, this, [this]() { phoneSaveAndConnect(); });
+    left->addWidget(connectBtn);
+    h->addLayout(left, 2);
+
+    // Right: the model list of the selected maker.
+    QVBoxLayout *right = new QVBoxLayout();
+    right->setSpacing(4);
+    right->addWidget(new QLabel(QStringLiteral("機種（自動にすると無線機から読み取ります）")));
+    phoneModelList = new QListWidget();
+    phoneModelList->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    QScroller::grabGesture(phoneModelList->viewport(), QScroller::LeftMouseButtonGesture);
+    phoneModelList->setStyleSheet("QListWidget::item{min-height:34px;}"
+                                  "QListWidget::item:selected{background:#2a8bd0;color:white;}");
+    connect(phoneModelList, &QListWidget::currentRowChanged, this, [this](int row) {
+        if (phoneFillingModels || row < 0)
+            return;
+        prefs.radioCIVAddr = (quint8) phoneModelList->item(row)->data(Qt::UserRole).toInt();
+        prefs.settingsChanged = true;
+        saveSettings();
+        if (phoneModelLabel1)
+            phoneModelLabel1->setText(phoneManufName(prefs.manufacturer) + QStringLiteral(" / ")
+                                      + phoneModelList->item(row)->text());
+    });
+    right->addWidget(phoneModelList, 1);
+    h->addLayout(right, 3);
+
+    refreshPhoneCivCombo1();
+    refreshPhoneManufacturer();
+    return page;
 }
 
 void wfmain::showPhoneConnect1()
