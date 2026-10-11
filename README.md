@@ -44,7 +44,7 @@ Google Play では配布していません。リリースページの APK を直
 
 | 版 | ファイル | 対象 |
 |----|----------|------|
-| 携帯版 2026.10.10 | [wfview4android-phone-2026.10.10.apk](https://github.com/kazushinjo/wfview_android-phone/releases/download/v2026.10.10/wfview4android-phone-2026.10.10.apk) | Android スマートフォン |
+| 携帯版 Ver 1.0 | [wfview4android-phone-1.0.apk](https://github.com/kazushinjo/wfview_android-phone/releases/download/v1.0/wfview4android-phone-1.0.apk) | Android スマートフォン |
 
 すべてのリリースは [リリースページ](https://github.com/kazushinjo/wfview_android-phone/releases) にあります。
 （本リポジトリは非公開のため、ダウンロードには GitHub のアカウントとリポジトリへのアクセス権が必要です。）
@@ -53,12 +53,13 @@ Google Play では配布していません。リリースページの APK を直
 2. APK を端末へコピーし（ダウンロード／USB／クラウドなど）、ファイルマネージャでタップします
 3. 「提供元不明のアプリのインストール」の確認が出たら、使用中のアプリ（ファイルマネージャ等）に**許可**を与えます
 4. 初回起動時に**マイクへのアクセス許可**を求められるので「アプリの使用時のみ」を選びます（送信音声に必要。拒否すると変調がかかりません）
-5. 開発者向け: `adb install -r wfview4android-phone-2026.10.10.apk`
+5. 開発者向け: `adb install -r wfview4android-phone-1.0.apk`
 
 > **以前の版からの入れ替えについて**
 > 2026.10.10 から、携帯版は識別名を `org.wfview4android.phone`、アプリ名を「wfview phone」にし、リリース用の新しい鍵で署名しています。
 > それより前に入れた版（アプリ名が wfview4android のもの）とは別のアプリとして入ります。古い版が不要ならアンインストールしてください。
 > 2026.10.10 以降は同じ鍵で署名するので、次の版からは上書きでき、設定も残ります。
+> バージョン表記は Ver 1.0 から番号方式に変えました。2026.10.10 版から Ver 1.0 へは上書きで更新できます。
 
 ---
 
