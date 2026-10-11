@@ -339,8 +339,10 @@ void wfmain::phoneSetupUi()
         // between meters | sliders | right column, and the right column flush
         // with the right edge (the trailing spacer no longer takes the rest).
         for(int i=0;i<ui->horizontalLayout_2->count();++i){
-            if(ui->horizontalLayout_2->itemAt(i)->spacerItem())
+            if(QSpacerItem *sp = ui->horizontalLayout_2->itemAt(i)->spacerItem()) {
                 ui->horizontalLayout_2->setStretch(i, 0);
+                sp->changeSize(6, 0, QSizePolicy::Fixed, QSizePolicy::Minimum);
+            }
         }
         ui->horizontalLayout_2->insertStretch(ui->horizontalLayout_2->indexOf(ui->rightControlsLayout), 1);
         ui->horizontalLayout_2->insertStretch(ui->horizontalLayout_2->indexOf(ui->metersVerticalLayout) + 1, 1);
@@ -387,9 +389,9 @@ void wfmain::phoneSetupUi()
                 ui->tuneNowBtn->setStyleSheet("QPushButton{background:#bfe6f5;"
                                               "color:#0a3a4a;border:1px solid #7fbdd6;"
                                               "border-radius:8px;padding:2px 8px;"
-                                              "min-height:28px;max-height:28px;}");
+                                              "min-height:36px;max-height:36px;}");
                 ui->tuneNowBtn->setFixedWidth(80);
-                ui->tuneNowBtn->setFixedHeight(28);
+                ui->tuneNowBtn->setFixedHeight(36);
             }
             // TUNER right-aligned in its row (no trailing stretch) so its right
             // edge lines up with the 送信 button's right edge below it.
@@ -446,9 +448,9 @@ void wfmain::phoneSetupUi()
             ui->transmitBtn->setStyleSheet("QPushButton{background:#c8ecc8;"
                                            "color:#0a3a0a;font-weight:bold;"
                                            "border-radius:8px;padding:2px 8px;"
-                                           "min-height:28px;max-height:28px;}");
+                                           "min-height:36px;max-height:36px;}");
             ui->transmitBtn->setFixedWidth(80);
-            ui->transmitBtn->setFixedHeight(28);
+            ui->transmitBtn->setFixedHeight(36);
             // Mirrors atRow's layout: same leading offset so 周波数ロック lines
             // up with アンテナチューナ above it, then a stretch so 送信's right
             // edge still lines up with the TUNE button's right edge.
@@ -533,13 +535,6 @@ void wfmain::phoneSetupUi()
         ui->metersVerticalLayout->setSpacing(2);
         // Remove the expanding spacer above the level sliders so they sit higher.
         ui->controlsLayout->removeItem(ui->verticalSpacer);
-        // Shift the whole slider group (RF/AF/SQL/M-A/TX/Mon) 24px to the right
-        // (was 80px; the sliders are now spaced further apart instead).
-        {
-            QMargins clMargins = ui->controlsLayout->contentsMargins();
-            clMargins.setLeft(clMargins.left() + 24);
-            ui->controlsLayout->setContentsMargins(clMargins);
-        }
         // Add a "WF" column to the level-slider row: a vertical slider that sets
         // the waterfall colour floor at runtime, independent of the spectrum. It
         // mirrors the RF/AF/SQL columns (slider on top, label below).
@@ -619,6 +614,87 @@ void wfmain::phoneSetupUi()
             right << ui->preampAttGroup->findChildren<QWidget*>();
             for(QWidget *w : right)
                 w->setFont(lf);
+        }
+        // Bigger level sliders for fingers: taller, with a slim groove and a
+        // small square handle (the 34 px widget width keeps the touch target),
+        // with larger labels.
+        {
+            ui->levelsHorizontalLayout->setSpacing(10);
+            QFont lf = ui->mainGroup->font();
+            lf.setPointSizeF(12.0);
+            const QString sliderStyle = QStringLiteral(
+                "QSlider::groove:vertical { width: 4px; border-radius: 2px;"
+                "  background: #4a535b; }"
+                "QSlider::sub-page:vertical { width: 4px; border-radius: 2px;"
+                "  background: #4a535b; }"
+                "QSlider::add-page:vertical { width: 4px; border-radius: 2px;"
+                "  background: #2a8bd0; }"
+                "QSlider::handle:vertical { height: 18px; width: 18px;"
+                "  margin: 0 -7px; border-radius: 3px;"
+                "  background: #d8dee3; border: 1px solid #6c7880; }");
+            QList<QLayout*> pending { ui->levelsHorizontalLayout };
+            while(!pending.isEmpty())
+            {
+                QLayout *l = pending.takeFirst();
+                for(int i = 0; i < l->count(); i++)
+                {
+                    QLayoutItem *it = l->itemAt(i);
+                    if(QSlider *s = qobject_cast<QSlider*>(it->widget()))
+                    {
+                        s->setFixedSize(34, 205);
+                        s->setStyleSheet(sliderStyle);
+                    }
+                    else if(QLabel *lbl = qobject_cast<QLabel*>(it->widget()))
+                    {
+                        lbl->setFont(lf);
+                        lbl->setMinimumWidth(QFontMetrics(lf).horizontalAdvance(lbl == phoneWfLevelLabel ? QStringLiteral("160") : lbl->text()) + 4);
+                    }
+                    else if(it->layout())
+                        pending << it->layout();
+                }
+            }
+            if(phoneWfLevelLabel)
+                phoneWfLevelLabel->setMaximumHeight(QFontMetrics(lf).lineSpacing() * 2 + 2);
+        }
+        // Vertical balance: the right-hand column's three rows (antenna tuner,
+        // preamp box, lock + 送信) sit together with even gaps, centred in the
+        // column's height, instead of hugging the top.
+        {
+            QBoxLayout *rc = ui->rightControlsLayout;
+            ui->horizontalLayout_2->setAlignment(rc, Qt::Alignment());
+            QLayout *atRow = nullptr, *preampRow = nullptr, *txRow = nullptr;
+            for(int i = 0; i < rc->count(); i++)
+            {
+                QLayoutItem *it = rc->itemAt(i);
+                if(QSpacerItem *sp = it->spacerItem())
+                    sp->changeSize(0, 4);
+                else if(QLayout *l = it->layout())
+                {
+                    if(l->indexOf(ui->tuneNowBtn) >= 0) atRow = l;
+                    else if(l->indexOf(ui->preampAttGroup) >= 0) preampRow = l;
+                    else if(l->indexOf(ui->transmitBtn) >= 0) txRow = l;
+                }
+            }
+            if(txRow)
+                rc->insertSpacing(rc->indexOf(txRow), 16);
+            if(preampRow)
+                rc->insertSpacing(rc->indexOf(preampRow), 16);
+            rc->insertStretch(0, 1);
+            rc->addStretch(1);
+            rc->invalidate();
+        }
+        // One text size for every control label on this tab (the その他
+        // check boxes were 8 pt, the right column 10 pt, the slider labels
+        // 11 pt).
+        {
+            QFont f = ui->mainGroup->font();
+            f.setPointSizeF(12.0);
+            QList<QWidget*> ws { ui->OtherControlsGrp, ui->tuneEnableChk,
+                                 ui->tuneLockChk, ui->preampAttGroup };
+            ws << ui->OtherControlsGrp->findChildren<QWidget*>()
+               << ui->preampAttGroup->findChildren<QWidget*>();
+            for(QWidget *w : ws)
+                w->setFont(f);
         }
         // A swipe-kill can drop settings writes that were only
         // sync()'d mid-session. Flush settings to disk whenever the app leaves the

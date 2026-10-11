@@ -4709,7 +4709,7 @@ void wfmain::changeTxBtn()
         ui->transmitBtn->setStyleSheet("QPushButton{background:#c8ecc8;"
                                        "color:red;font-weight:bold;"
                                        "border-radius:8px;padding:2px 8px;"
-                                       "min-height:28px;max-height:28px;}");
+                                       "min-height:36px;max-height:36px;}");
 #endif
     } else {
         ui->transmitBtn->setText("送信");
@@ -4717,7 +4717,7 @@ void wfmain::changeTxBtn()
         ui->transmitBtn->setStyleSheet("QPushButton{background:#c8ecc8;"
                                        "color:#0a3a0a;font-weight:bold;"
                                        "border-radius:8px;padding:2px 8px;"
-                                       "min-height:28px;max-height:28px;}");
+                                       "min-height:36px;max-height:36px;}");
 #endif
     }
 #ifdef Q_OS_ANDROID
