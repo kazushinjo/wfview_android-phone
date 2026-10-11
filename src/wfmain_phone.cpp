@@ -334,10 +334,16 @@ void wfmain::phoneSetupUi()
         ui->horizontalLayout_2->setStretchFactor(ui->controlsLayout, 0);
         ui->horizontalLayout_2->setStretchFactor(ui->buttonsVerticalLayout, 0);
         ui->horizontalLayout_2->setStretchFactor(ui->rightControlsLayout, 0);
+        // Phone screens are wider than the iPhone this layout came from, so
+        // spread the columns over the full width: equal stretchable gaps
+        // between meters | sliders | right column, and the right column flush
+        // with the right edge (the trailing spacer no longer takes the rest).
         for(int i=0;i<ui->horizontalLayout_2->count();++i){
             if(ui->horizontalLayout_2->itemAt(i)->spacerItem())
-                ui->horizontalLayout_2->setStretch(i, 1);
+                ui->horizontalLayout_2->setStretch(i, 0);
         }
+        ui->horizontalLayout_2->insertStretch(ui->horizontalLayout_2->indexOf(ui->rightControlsLayout), 1);
+        ui->horizontalLayout_2->insertStretch(ui->horizontalLayout_2->indexOf(ui->metersVerticalLayout) + 1, 1);
         // rightControlsLayout (Preamp/Att + Antenna) has no expanding content, so
         // the surrounding row's default cross-axis distribution vertically centres
         // it, leaving a large empty gap above the Preamp/Att box. Pin it to the
