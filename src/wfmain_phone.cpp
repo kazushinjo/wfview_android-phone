@@ -8,8 +8,11 @@
 #include "ui_wfmain.h"
 #include "logcategories.h"
 #include "phonerecorder.h"
+#include "phonefreqdisplay.h"
+#include "phonetuningdial.h"
 
 #include <QApplication>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QFont>
 #include <QFontDatabase>
@@ -212,6 +215,8 @@ void wfmain::phoneSetupUi()
         // tabs simply fill whatever height remains after the bottom row.
         phoneTabs->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
         phoneTabs->addTab(ui->scopeVFOGroup, QStringLiteral("スコープ"));
+        // Operating-only page: spectrum/waterfall, tuning knob, S-meter, transmit.
+        phoneTrxTabIndex = phoneTabs->addTab(createPhoneTrxTab(), QStringLiteral("送受信"));
         // Placed directly in the tab (no scroll area) so the expanding spacers
         // auto-fit everything to one screen. The added frequency line is offset
         // by the smaller meters below.
@@ -249,7 +254,15 @@ void wfmain::phoneSetupUi()
         // Switching tabs could leave the previous page's geometry in place,
         // clipping the group-box borders and bottom row. Force the shown page to
         // refit the tab area and repaint on every change.
-        connect(phoneTabs, &QTabWidget::currentChanged, this, [this](int){
+        connect(phoneTabs, &QTabWidget::currentChanged, this, [this](int idx){
+            // The spectrum/waterfall exist once, in the scope tab; they are moved
+            // into the 送受信 tab only while that tab is shown.
+            if(idx == phoneTrxTabIndex) {
+                phoneTrxAttachScope();
+                // The step may have been changed on the scope tab meanwhile.
+                phoneTrxUpdateStepText();
+            } else
+                phoneTrxDetachScope();
             if(QWidget* pg = phoneTabs->currentWidget()){
                 if(pg->layout())
                     pg->layout()->activate();
@@ -952,4 +965,182 @@ void wfmain::phoneUpdateFreq(quint64 hz)
         phoneOpFreqLabel->setText(g +
             QStringLiteral("<span style='font-size:17px'> MHz</span>"));
     }
+    if(phoneTrxFreqDisplay)
+    {
+        phoneTrxFreqDisplay->setGroupSeparator(prefs.groupSeparator);
+        phoneTrxFreqDisplay->setFrequency(hz);
+    }
+}
+
+// 送受信 tab: just what is needed to operate -- spectrum + waterfall on the left,
+// and on the right the frequency (tap a digit to set the step), S-meter, a large
+// round tuning knob, and transmit / frequency-lock buttons. No settings.
+QWidget *wfmain::createPhoneTrxTab()
+{
+    QWidget *page = new QWidget();
+    QHBoxLayout *h = new QHBoxLayout(page);
+    h->setContentsMargins(4, 4, 4, 4);
+    h->setSpacing(8);
+
+    // Left: the scope's spectrum + waterfall are moved in here while the tab
+    // is shown (see phoneTrxAttachScope()).
+    QWidget *scopeHost = new QWidget();
+    scopeHost->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    phoneTrxScopeLayout = new QVBoxLayout(scopeHost);
+    phoneTrxScopeLayout->setContentsMargins(0, 0, 0, 0);
+    h->addWidget(scopeHost, 1);
+
+    // Right: frequency + S-meter on top, knob and buttons below.
+    QWidget *right = new QWidget();
+    right->setFixedWidth(400);
+    QVBoxLayout *rv = new QVBoxLayout(right);
+    rv->setContentsMargins(0, 0, 0, 0);
+    rv->setSpacing(4);
+
+    phoneTrxFreqDisplay = new phoneFreqDisplay();
+    rv->addWidget(phoneTrxFreqDisplay);
+
+    phoneTrxMeter = new meter();
+    phoneTrxMeter->setFixedHeight(40);
+    // Display only: the double-tap meter-type picker belongs to the 操作 tab.
+    phoneTrxMeter->setAttribute(Qt::WA_TransparentForMouseEvents);
+    // Give it a scale right away so it is drawn even before connecting.
+    phoneTrxSetMeterType(meterS);
+    rv->addWidget(phoneTrxMeter);
+
+    QHBoxLayout *bottom = new QHBoxLayout();
+    bottom->setSpacing(10);
+    phoneTrxDial = new phoneTuningDial();
+    phoneTrxDial->setEnabled(false);
+    bottom->addWidget(phoneTrxDial, 1);
+
+    // Transmit on top and frequency lock below, each half the column height.
+    QVBoxLayout *btnCol = new QVBoxLayout();
+    btnCol->setSpacing(10);
+    phoneTrxTxBtn = new QPushButton(QStringLiteral("送信"));
+    {
+        QFont f = phoneTrxTxBtn->font();
+        f.setBold(true);
+        f.setPixelSize(26);
+        phoneTrxTxBtn->setFont(f);
+    }
+    phoneTrxTxBtn->setFixedWidth(110);
+    phoneTrxTxBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    phoneTrxTxBtn->setFocusPolicy(Qt::NoFocus);
+    phoneTrxTxBtn->setEnabled(false);
+    phoneTrxTxBtn->setStyleSheet("QPushButton{background:#c8ecc8;color:#0a3a0a;font-weight:bold;"
+                                 "border:2px solid #7fbf7f;border-radius:14px;}"
+                                 "QPushButton:disabled{background:#3c463c;color:#7a857a;border-color:#4c564c;}");
+    btnCol->addWidget(phoneTrxTxBtn, 1);
+
+    phoneTrxLockBtn = new QPushButton(QStringLiteral("ロック"));
+    {
+        QFont f = phoneTrxLockBtn->font();
+        f.setBold(true);
+        f.setPixelSize(22);
+        phoneTrxLockBtn->setFont(f);
+    }
+    phoneTrxLockBtn->setCheckable(true);
+    phoneTrxLockBtn->setFixedWidth(110);
+    phoneTrxLockBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    phoneTrxLockBtn->setFocusPolicy(Qt::NoFocus);
+    phoneTrxLockBtn->setEnabled(false);
+    phoneTrxLockBtn->setStyleSheet("QPushButton{background:#2c353c;color:#e6e8ea;font-weight:bold;"
+                                   "border:2px solid #5c6b75;border-radius:14px;}"
+                                   "QPushButton:checked{background:#e09a2a;color:#1c1c1c;border-color:#ffc060;}"
+                                   "QPushButton:disabled{background:#262c31;color:#5c6670;border-color:#3a4248;}");
+    btnCol->addWidget(phoneTrxLockBtn, 1);
+    bottom->addLayout(btnCol, 0);
+    rv->addLayout(bottom, 1);
+    h->addWidget(right, 0);
+
+    connect(phoneTrxTxBtn, &QPushButton::clicked, this, [this]() { on_transmitBtn_clicked(); });
+    connect(phoneTrxDial, &phoneTuningDial::stepped, this, [this](int steps) { phoneTrxTune(steps); });
+    // Same lock as the 操作 tab's 周波数ロック checkbox; keep the two in step.
+    connect(phoneTrxLockBtn, &QPushButton::clicked, this, [this](bool on) {
+        ui->tuneLockChk->setChecked(on);
+        on_tuneLockChk_clicked(on);
+    });
+    connect(ui->tuneLockChk, &QCheckBox::toggled, phoneTrxLockBtn, &QPushButton::setChecked);
+    connect(phoneTrxLockBtn, &QPushButton::toggled, this, [this](bool on) {
+        phoneTrxLockBtn->setText(on ? QStringLiteral("ロック中") : QStringLiteral("ロック"));
+    });
+    // Tap a digit of the frequency to make it the tuning step.
+    connect(phoneTrxFreqDisplay, &phoneFreqDisplay::stepSelected, this, [this](quint64 hz) {
+        if (receivers.isEmpty() || currentReceiver >= receivers.size())
+            return;
+        receivers[currentReceiver]->setStepSize(hz);
+        phoneTrxUpdateStepText();
+    });
+    phoneTrxUpdateStepText();
+    return page;
+}
+
+void wfmain::phoneTrxUpdateStepText()
+{
+    if (!phoneTrxDial)
+        return;
+    if (receivers.isEmpty() || currentReceiver >= receivers.size()) {
+        phoneTrxDial->setCenterText(QString());
+        return;
+    }
+    quint64 s = receivers[currentReceiver]->getStepSize();
+    if (phoneTrxFreqDisplay)
+        phoneTrxFreqDisplay->setStep(s);
+    QString t;
+    if (s >= 1000000 && s % 1000000 == 0)
+        t = QStringLiteral("%1 MHz").arg(s / 1000000);
+    else if (s >= 1000 && s % 1000 == 0)
+        t = QStringLiteral("%1 kHz").arg(s / 1000);
+    else
+        t = QStringLiteral("%1 Hz").arg(s);
+    phoneTrxDial->setCenterText(t);
+}
+
+void wfmain::phoneTrxTune(int steps)
+{
+    if (freqLock || receivers.isEmpty() || currentReceiver >= receivers.size())
+        return;
+    receiverWidget *rx = receivers[currentReceiver];
+    freqt f;
+    f.Hz = roundFrequencyWithStep(rx->getFrequency().Hz, steps, rx->getStepSize());
+    f.MHzDouble = f.Hz / (double)1E6;
+    if (f.Hz == 0)
+        return;
+    rx->setFrequency(f);
+    queue->addUnique(priorityImmediate, queueItem(queue->getVfoCommand(vfoA, currentReceiver, true).freqFunc,
+                                                  QVariant::fromValue<freqt>(f), false, uchar(currentReceiver)));
+    if (currentReceiver == 0)
+        phoneUpdateFreq(f.Hz);
+}
+
+void wfmain::phoneTrxSetMeterType(meter_t type)
+{
+    if (!phoneTrxMeter)
+        return;
+    double lowVal = 0.0, highVal = 255.0, lineVal = 200;
+    phoneTrxMeter->setMeterType(type);
+    phoneTrxMeter->setMeterShortString(meterString[(int)type]);
+    if (rigCaps != Q_NULLPTR && rigCaps->meters[type].size())
+        getMeterExtremities(type, lowVal, highVal, lineVal);
+    phoneTrxMeter->setMeterExtremities(lowVal, highVal, lineVal);
+}
+
+void wfmain::phoneTrxAttachScope()
+{
+    if (!phoneTrxScopeLayout || receivers.isEmpty())
+        return;
+    receiverWidget *rx = receivers[0];
+    if (phoneTrxScopeOwner == rx)
+        return;
+    phoneTrxDetachScope();
+    rx->lendScope(phoneTrxScopeLayout);
+    phoneTrxScopeOwner = rx;
+}
+
+void wfmain::phoneTrxDetachScope()
+{
+    if (phoneTrxScopeOwner)
+        phoneTrxScopeOwner->returnScope();
+    phoneTrxScopeOwner = nullptr;
 }

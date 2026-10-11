@@ -83,7 +83,7 @@ public:
 
     void setIFShift (uchar val);
 
-    quint16 getStepSize () { return stepSize;}
+    quint64 getStepSize () { return stepSize;}
     void setStepSize (quint64 hz) { stepSize = hz;}
 
     freqt getFrequency () { return freq;}
@@ -134,6 +134,12 @@ public:
     void selected(bool);
     bool isSelected() {return isActive;}
     void showScope(bool en) { this->splitter->setVisible(en); }
+#ifdef Q_OS_ANDROID
+    // Lend the spectrum + waterfall (the splitter) to the phone 送受信 tab (they
+    // keep drawing and tap-to-tune), then put it back in this widget.
+    void lendScope(QLayout *into);
+    void returnScope();
+#endif
     bool isScopeEnabled() { return this->configScopeEnabled->isEnabled();};
 
     void displaySettings(int NumDigits, qint64 Minf, qint64 Maxf, int MinStep,FctlUnit unit,std::vector<bandType>* bands = Q_NULLPTR);
@@ -220,6 +226,10 @@ private:
     QSpacerItem* displayRSpacer;
     QGroupBox* group;
     QSplitter* splitter;
+#ifdef Q_OS_ANDROID
+    int lentSplitterIndex = 0;
+    bool scopeLent = false;
+#endif
     QHBoxLayout* mainLayout;
     QVBoxLayout* layout;
     QVBoxLayout* rhsLayout;

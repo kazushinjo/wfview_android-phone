@@ -8,6 +8,10 @@
 #include <QThread>
 #include <QElapsedTimer>
 
+#ifdef WFVIEW_PHONE
+std::atomic<bool> audioHandlerQtOutput::rxMuted {false};
+#endif
+
 bool audioHandlerQtOutput::openDevice() noexcept
 {
 #if (QT_VERSION < QT_VERSION_CHECK(6,0,0))
@@ -27,6 +31,12 @@ bool audioHandlerQtOutput::openDevice() noexcept
 
 #if (defined(Q_OS_WIN) && (QT_VERSION < QT_VERSION_CHECK(6,0,0)))
     audioOutput->setBufferSize(nativeFormat.bytesForDuration(setupData.latency * 100));
+#elif defined(Q_OS_ANDROID)
+    // Qt's OpenSL ES sink queues 4 buffers of this size, so sizing it to the
+    // whole latency (500 ms) put ~2 s of audio inside the sink, on top of the
+    // ring buffer below -- RX audio ran ~3 s behind and kept playing long
+    // after 送信. The ring buffer absorbs network jitter; keep the sink small.
+    audioOutput->setBufferSize(nativeFormat.bytesForDuration(60 * 1000));
 #else
     audioOutput->setBufferSize(nativeFormat.bytesForDuration(setupData.latency * 1000));
 #endif
@@ -93,6 +103,17 @@ void audioHandlerQtOutput::incomingAudio(audioPacket packet)
 void audioHandlerQtOutput::onConverted(audioPacket pkt)
 {
     if (!audioOutput || !audioDevice || pkt.data.isEmpty()) return;
+#ifdef WFVIEW_PHONE
+    if (rxMuted.load(std::memory_order_relaxed)) {
+        // Keep feeding the sink (silence in place of the audio) so it never
+        // runs dry and stalls.
+        if (ringDevice) {
+            ringDevice->silence();
+            ringDevice->append(QByteArray(pkt.data.size(), '\0'));
+        }
+        return;
+    }
+#endif
     const int nowToPktMs = pkt.time.msecsTo(QTime::currentTime());
     if (nowToPktMs > setupData.latency * 1.5) {
         return; // late frame ( more than latency * 1.5), drop

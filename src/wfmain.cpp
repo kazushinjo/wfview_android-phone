@@ -2,6 +2,8 @@
 #include "androidcompat.h"
 #ifdef Q_OS_ANDROID
 #include "androidcombobox.h"
+#include "phonetuningdial.h"
+#include "audiohandlerqtoutput.h"
 #include <QTextBrowser>
 #include <QTextBlock>
 #include <QAbstractTextDocumentLayout>
@@ -912,6 +914,9 @@ void wfmain::removeRig()
         ui->cwButton->setEnabled(false);
     }
 
+#ifdef Q_OS_ANDROID
+    phoneTrxDetachScope();
+#endif
     for (const auto &receiver:receivers) {
         delete receiver;
     }
@@ -1380,6 +1385,9 @@ void wfmain::configureVFOs()
         return;
     }
 
+#ifdef Q_OS_ANDROID
+    phoneTrxDetachScope();
+#endif
     if (receivers.size()) {
         foreach (receiverWidget* receiver, receivers)
         {
@@ -1446,6 +1454,11 @@ void wfmain::configureVFOs()
         //}
 
     }
+#ifdef Q_OS_ANDROID
+    if(phoneTabs && phoneTabs->currentIndex() == phoneTrxTabIndex)
+        phoneTrxAttachScope();
+    phoneTrxUpdateStepText();
+#endif
 }
 
 void wfmain::setSerialDevicesUI()
@@ -3172,6 +3185,10 @@ void wfmain::extChangedColPref(prefColItem i)
     case col_meterScale:
     case col_meterText:
         ui->meterSPoWidget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
+#ifdef Q_OS_ANDROID
+        if (phoneTrxMeter)
+            phoneTrxMeter->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
+#endif
         ui->meter2Widget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
         ui->meter3Widget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
 #ifdef Q_OS_ANDROID
@@ -4617,6 +4634,9 @@ void wfmain::initPeriodicCommands()
     prefs.meter3Type = meterTxMod;
 #endif
     changeMeterType(prefs.meter1Type, 1);
+#ifdef Q_OS_ANDROID
+    phoneTrxSetMeterType(amTransmitting ? meterPower : meterS);
+#endif
     changeMeterType(prefs.meter2Type, 2);
     changeMeterType(prefs.meter3Type, 3);
     ui->meter2Widget->blockMeterType(prefs.meter3Type);
@@ -4666,6 +4686,10 @@ void wfmain::receivePTTstatus(bool pttOn)
         pttLed->setState(QLedLabel::State::StateOk);
         pttLed->setToolTip("Receiving");
         changePrimaryMeter(false);
+#ifdef WFVIEW_PHONE
+        // Back to RX by any route (button, 3-minute PTT limit, ...).
+        audioHandlerQtOutput::setRxMuted(false);
+#endif
         // Send updated BSR? Currently a work-in-progress M0VSE
         //receivers[currentReceiver]->updateBSR(&rigCaps->bands);
     }
@@ -4696,6 +4720,18 @@ void wfmain::changeTxBtn()
                                        "min-height:28px;max-height:28px;}");
 #endif
     }
+#ifdef Q_OS_ANDROID
+    if(phoneTrxTxBtn)
+    {
+        phoneTrxTxBtn->setText(amTransmitting ? QStringLiteral("送信中") : QStringLiteral("送信"));
+        phoneTrxTxBtn->setStyleSheet(amTransmitting
+            ? "QPushButton{background:#d83a3a;color:white;font-weight:bold;"
+              "border:2px solid #ff8080;border-radius:14px;}"
+            : "QPushButton{background:#c8ecc8;color:#0a3a0a;font-weight:bold;"
+              "border:2px solid #7fbf7f;border-radius:14px;}"
+              "QPushButton:disabled{background:#3c463c;color:#7a857a;border-color:#4c564c;}");
+    }
+#endif
 }
 
 void wfmain::changePrimaryMeter(bool transmitOn) {
@@ -4723,6 +4759,9 @@ void wfmain::changePrimaryMeter(bool transmitOn) {
         if (rigCaps->meters[meterPower].size())
             getMeterExtremities(meterPower, lowVal, highVal, lineVal);
         ui->meterSPoWidget->setMeterExtremities(lowVal, highVal, lineVal);
+#ifdef Q_OS_ANDROID
+        phoneTrxSetMeterType(meterPower);
+#endif
 
     } else {
         oldCmd = meter_tToMeterCommand(meterPower);
@@ -4732,12 +4771,19 @@ void wfmain::changePrimaryMeter(bool transmitOn) {
         if (rigCaps->meters[meterS].size())
             getMeterExtremities(meterS, lowVal, highVal, lineVal);
         ui->meterSPoWidget->setMeterExtremities(lowVal, highVal, lineVal);
+#ifdef Q_OS_ANDROID
+        phoneTrxSetMeterType(meterS);
+#endif
     }
     queue->del(oldCmd,0);
     if (rigCaps->commands.contains(newCmd)) {
         queue->add(priorityHighest,queueItem(newCmd,true,0));
     }
     ui->meterSPoWidget->clearMeterOnPTTtoggle();
+#ifdef Q_OS_ANDROID
+    if (phoneTrxMeter)
+        phoneTrxMeter->clearMeterOnPTTtoggle();
+#endif
     ui->meter2Widget->clearMeterOnPTTtoggle();
     ui->meter3Widget->clearMeterOnPTTtoggle();
 }
@@ -5528,6 +5574,21 @@ void wfmain::on_transmitBtn_clicked()
         // Are we already PTT? Not a big deal, just send again anyway.
         showStatusBarText("Sending PTT ON command. Use Control-R to receive.");
         queue->add(priorityImmediate,queueItem(funcTransceiverStatus,QVariant::fromValue<bool>(true),false,uchar(0)));
+#ifdef Q_OS_ANDROID
+        // The TX/RX state is otherwise only polled at "High" priority (several
+        // hundred ms apart), so the 送受信 tab and the meters were slow to
+        // follow. Ask for it right after the PTT command.
+        queue->add(priorityImmediate,funcTransceiverStatus,false,0);
+#endif
+#ifdef WFVIEW_PHONE
+        // Stop RX audio at once rather than when the (lagging) stream goes
+        // quiet. If the rig never goes to TX, un-mute again after 3 s.
+        audioHandlerQtOutput::setRxMuted(true);
+        QTimer::singleShot(3000, this, [this]() {
+            if (!amTransmitting)
+                audioHandlerQtOutput::setRxMuted(false);
+        });
+#endif
 
 #ifdef Q_OS_ANDROID
         // Optimistic UI: the polled PTT status takes a moment to come back,
@@ -5544,6 +5605,12 @@ void wfmain::on_transmitBtn_clicked()
     } else {
         // Currently transmitting
         queue->add(priorityImmediate,queueItem(funcTransceiverStatus,QVariant::fromValue<bool>(false),false,uchar(0)));
+#ifdef Q_OS_ANDROID
+        queue->add(priorityImmediate,funcTransceiverStatus,false,0);
+#endif
+#ifdef WFVIEW_PHONE
+        audioHandlerQtOutput::setRxMuted(false);
+#endif
 
 #ifdef Q_OS_ANDROID
         ui->transmitBtn->setText("送信");
@@ -5977,11 +6044,29 @@ void wfmain::receiveMeter(meter_t inMeter, double level)
                 ui->meterSPoWidget->setMeterType(meterS);
                 ui->meterSPoWidget->setLevel(level);
                 ui->meterSPoWidget->repaint();
+#ifdef Q_OS_ANDROID
+                // The 送受信 meter ignores S readings while transmitting (the
+                // server keeps forwarding them), so it does not flicker.
+                if (phoneTrxMeter && !amTransmitting) {
+                    if (phoneTrxMeter->getMeterType() != meterS)
+                        phoneTrxSetMeterType(meterS);
+                    phoneTrxMeter->setLevel(level);
+                    phoneTrxMeter->update();
+                }
+#endif
             break;
         case meterPower:
             ui->meterSPoWidget->setMeterType(meterPower);
             ui->meterSPoWidget->setLevel(level);
             ui->meterSPoWidget->update();
+#ifdef Q_OS_ANDROID
+            if (phoneTrxMeter && amTransmitting) {
+                if (phoneTrxMeter->getMeterType() != meterPower)
+                    phoneTrxSetMeterType(meterPower);
+                phoneTrxMeter->setLevel(level);
+                phoneTrxMeter->update();
+            }
+#endif
             break;
         default:
             meter* marray[2];
@@ -6546,6 +6631,10 @@ void wfmain::useColorPreset(colorPrefsType *cp)
 
     //qInfo(logSystem()) << "Setting plots to color preset number " << cp->presetNum << ", with name " << *(cp->presetName);
     ui->meterSPoWidget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
+#ifdef Q_OS_ANDROID
+    if (phoneTrxMeter)
+        phoneTrxMeter->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
+#endif
     ui->meter2Widget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
     ui->meter3Widget->setColors(cp->meterLevel, cp->meterPeakScale, cp->meterPeakLevel, cp->meterAverage, cp->meterLowerLine, cp->meterLowText);
 #ifdef Q_OS_ANDROID
@@ -7329,6 +7418,10 @@ void wfmain::receiveValue(cacheItem val){
             changeMeterType(m.type,1);
         }
         ui->meterSPoWidget->setLevel(m.value);
+#ifdef Q_OS_ANDROID
+        if (phoneTrxMeter && phoneTrxMeter->getMeterType() == m.type)
+            phoneTrxMeter->setLevel(m.value);
+#endif
         break;
     }
     case funcMeterType:
@@ -7850,6 +7943,10 @@ void wfmain::receiveRigCaps(rigCapabilities* caps)
         }
 
         ui->transmitBtn->setEnabled(rigCaps->hasTransmit);
+#ifdef Q_OS_ANDROID
+        if (phoneTrxTxBtn)
+            phoneTrxTxBtn->setEnabled(rigCaps->hasTransmit);
+#endif
         ui->micGainSlider->setEnabled(rigCaps->hasTransmit);
         ui->txPowerSlider->setEnabled(rigCaps->hasTransmit);
         const bool audioProcAvail = rigCaps->hasTransmit && prefs.enableLAN;
@@ -8235,6 +8332,10 @@ void wfmain::enableControls(bool en)
     ui->tuningStepCombo->setEnabled(en);
     ui->tuneLockChk->setEnabled(en);
 #ifdef Q_OS_ANDROID
+    if (phoneTrxLockBtn)
+        phoneTrxLockBtn->setEnabled(en);
+#endif
+#ifdef Q_OS_ANDROID
     if (androidLockButton != nullptr)
         androidLockButton->setEnabled(en);
 #endif
@@ -8253,6 +8354,12 @@ void wfmain::enableControls(bool en)
     ui->memoriesBtn->setEnabled(en);
     ui->rptSetupBtn->setEnabled(en);
     ui->transmitBtn->setEnabled(en);
+#ifdef Q_OS_ANDROID
+    if (phoneTrxTxBtn)
+        phoneTrxTxBtn->setEnabled(en);
+    if (phoneTrxDial)
+        phoneTrxDial->setEnabled(en);
+#endif
     ui->tuneEnableChk->setEnabled(en);
     ui->tuneNowBtn->setEnabled(en);
 

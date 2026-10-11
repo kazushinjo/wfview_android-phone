@@ -576,6 +576,9 @@ android {
     DEFINES += WFVIEW_PHONE
     SOURCES += src/audio/phonerecorder.cpp src/wfmain_phone.cpp
     HEADERS += include/phonerecorder.h
+    # 送受信 tab: tappable frequency readout and round tuning knob.
+    SOURCES += src/phonefreqdisplay.cpp src/phonetuningdial.cpp
+    HEADERS += include/phonefreqdisplay.h include/phonetuningdial.h
     ANDROID_ABIS = arm64-v8a
 
     # This Qt kit's NDK floor is API 28 (see mkspecs/qdevice.pri); vendored libopus

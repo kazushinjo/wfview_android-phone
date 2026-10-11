@@ -59,6 +59,7 @@
 #include "sidebandchooser.h"
 #include "debugwindow.h"
 #include "receiverwidget.h"
+#include <QPointer>
 #include "tciserver.h"
 
 #include <qcustomplot.h>
@@ -578,6 +579,21 @@ private:
     class QSlider *phoneWfLevelSlider = nullptr; // operate-tab waterfall color floor
     class QLabel *phoneWfLevelLabel = nullptr;
     int phoneStepHz = 1000;
+    // 送受信 tab: scope + round tuning knob + S-meter + transmit/lock only.
+    QWidget *createPhoneTrxTab();
+    void phoneTrxAttachScope();
+    void phoneTrxDetachScope();
+    void phoneTrxSetMeterType(meter_t type);
+    void phoneTrxTune(int steps);
+    void phoneTrxUpdateStepText();
+    int phoneTrxTabIndex = -1;
+    class QVBoxLayout *phoneTrxScopeLayout = nullptr;
+    QPointer<receiverWidget> phoneTrxScopeOwner;
+    class meter *phoneTrxMeter = nullptr;
+    class phoneFreqDisplay *phoneTrxFreqDisplay = nullptr;
+    class QPushButton *phoneTrxTxBtn = nullptr;
+    class QPushButton *phoneTrxLockBtn = nullptr;
+    class phoneTuningDial *phoneTrxDial = nullptr;
     // CW decoder and its one-line display at the top (CW modes only).
     class CwDecoder *cwDecoder = nullptr;
     class QFrame *androidCwBar = nullptr;

@@ -3,6 +3,7 @@
 #include "audiohandlerbase.h"
 
 #ifdef Q_OS_ANDROID
+#include <atomic>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QElapsedTimer>
@@ -26,6 +27,9 @@ public:
             buf.remove(0, buf.size() - cap); // overflow: drop oldest audio
     }
     qint64 queuedBytes() const { QMutexLocker l(&m); return buf.size(); }
+    // Overwrite what is queued with silence, keeping its length: an empty
+    // buffer makes the sink go idle and it then never pulls again.
+    void silence() { QMutexLocker l(&m); buf.fill('\0'); }
 
     // The backend checks bytesAvailable() before pulling; the default
     // implementation reports 0 for data held outside QIODevice's own
@@ -68,6 +72,13 @@ public:
     ~audioHandlerQtOutput() override { dispose(); } // ensure close on destruction
     QString role() const override { return QStringLiteral("Output"); }
 
+#ifdef WFVIEW_PHONE
+    // Silence RX playback (and drop what is already queued) while the user
+    // transmits. The server's RX audio can lag the rig by seconds, so without
+    // this the receiver kept playing after pressing 送信.
+    static void setRxMuted(bool muted) { rxMuted.store(muted, std::memory_order_relaxed); }
+#endif
+
 public slots:
     void incomingAudio(audioPacket packet);
 
@@ -89,6 +100,9 @@ private:
     QIODevice*       audioDevice {nullptr};
 #ifdef Q_OS_ANDROID
     QtOutputRingDevice* ringDevice {nullptr};
+#endif
+#ifdef WFVIEW_PHONE
+    static std::atomic<bool> rxMuted;
 #endif
 
 private slots:

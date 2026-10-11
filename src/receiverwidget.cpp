@@ -779,6 +779,18 @@ receiverWidget::~receiverWidget(){
         sp.remove();
     }
 
+#ifdef Q_OS_ANDROID
+    // A lent scope is no longer our child; delete it ourselves before the
+    // colour-map data goes away below.
+    if (scopeLent)
+    {
+        delete splitter;
+        splitter = Q_NULLPTR;
+        spectrum = Q_NULLPTR;
+        waterfall = Q_NULLPTR;
+    }
+#endif
+
     if(colorMapData != Q_NULLPTR)
     {
         delete colorMapData;
@@ -1365,6 +1377,29 @@ void receiverWidget::computePlasma()
         }
     }
 }
+
+#ifdef Q_OS_ANDROID
+void receiverWidget::lendScope(QLayout *into)
+{
+    if (scopeLent)
+        return;
+    bool hidden = splitter->isHidden();
+    lentSplitterIndex = layout->indexOf(splitter);
+    into->addWidget(splitter);
+    splitter->setVisible(!hidden);
+    scopeLent = true;
+}
+
+void receiverWidget::returnScope()
+{
+    if (!scopeLent)
+        return;
+    bool hidden = splitter->isHidden();
+    layout->insertWidget(lentSplitterIndex, splitter);
+    splitter->setVisible(!hidden);
+    scopeLent = false;
+}
+#endif
 
 void receiverWidget::showHideControls(uchar mode)
 {
